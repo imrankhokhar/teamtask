@@ -1,0 +1,65 @@
+{
+  "name": "teamtask-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "TeamTask Windows desktop (free, offline-capable hub)",
+  "main": "main.js",
+  "author": "TeamTask",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis portable"
+  },
+  "build": {
+    "appId": "com.teamtask.free",
+    "productName": "TeamTask",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "cloud-config.json"
+    ],
+    "extraResources": [
+      {
+        "from": "server-bundle",
+        "to": "server"
+      },
+      {
+        "from": "cloud-config.json",
+        "to": "cloud-config.json"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "TeamTask-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "TeamTask"
+    },
+    "portable": {
+      "artifactName": "TeamTask-Portable-${version}.exe"
+    }
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  }
+}

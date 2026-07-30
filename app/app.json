@@ -1,0 +1,70 @@
+{
+  "expo": {
+    "name": "TeamTask",
+    "slug": "teamtask",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F1C17"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.teamtask.free",
+      "infoPlist": {
+        "UIBackgroundModes": ["remote-notification"]
+      }
+    },
+    "android": {
+      "package": "com.teamtask.free",
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "backgroundColor": "#0F1C17",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "POST_NOTIFICATIONS",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "TeamTask",
+      "shortName": "TeamTask",
+      "description": "Shared team tasks, checklists, and notifications",
+      "lang": "en",
+      "scope": "/",
+      "startUrl": ".",
+      "display": "standalone",
+      "themeColor": "#0F1C17",
+      "backgroundColor": "#0F1C17",
+      "bundler": "metro",
+      "splash": {
+        "image": "./assets/splash-icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0F1C17"
+      }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "sounds": []
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "local-free-teamtask"
+      }
+    }
+  }
+}

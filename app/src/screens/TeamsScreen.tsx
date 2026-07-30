@@ -1,0 +1,336 @@
+import React, { useCallback, useState } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  RefreshControl,
+  Platform,
+} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { api } from '../api';
+import { useAuth } from '../auth';
+import { colors } from '../theme';
+import AppShell from '../components/AppShell';
+
+export default function TeamsScreen({ navigation }: any) {
+  const { can } = useAuth();
+  const [teams, setTeams] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [pickerValue, setPickerValue] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      const t = await api.teams();
+      setTeams(t.teams || []);
+      try {
+        const u = await api.users();
+        setUsers(u.users || []);
+      } catch {
+        setUsers([]);
+      }
+    } catch (e: any) {
+      const text = e.message || 'Failed';
+      setMsg(text);
+      if (Platform.OS !== 'web') Alert.alert('Error', text);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  function resetForm() {
+    setEditingId(null);
+    setShowForm(false);
+    setName('');
+    setMemberIds([]);
+    setPickerValue('');
+  }
+
+  function startEdit(team: any) {
+    setEditingId(team.id);
+    setShowForm(true);
+    setName(team.name || '');
+    setMemberIds((team.members || []).map((m: any) => m.id));
+    setMsg(`Editing "${team.name}"`);
+  }
+
+  function addFromPicker(userId: string) {
+    if (!userId) return;
+    setMemberIds((ids) => (ids.includes(userId) ? ids : [...ids, userId]));
+    setPickerValue('');
+  }
+
+  async function create() {
+    if (!name.trim()) {
+      setMsg('Team name required');
+      return;
+    }
+    if (!memberIds.length) {
+      setMsg('Select at least one team member from the dropdown');
+      return;
+    }
+    try {
+      setMsg('');
+      if (editingId) {
+        await api.updateTeam(editingId, {
+          name: name.trim(),
+          memberIds,
+        });
+        setMsg('Team updated');
+      } else {
+        await api.createTeam({
+          name: name.trim(),
+          memberIds,
+        });
+        setMsg('Team created');
+      }
+      resetForm();
+      await load();
+    } catch (e: any) {
+      setMsg(e.message || 'Failed');
+    }
+  }
+
+  async function removeTeam(team: any) {
+    const ok =
+      Platform.OS === 'web'
+        ? window.confirm(`Delete team "${team.name}"?`)
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert('Delete team', `Delete "${team.name}"?`, [
+              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+            ]);
+          });
+    if (!ok) return;
+    try {
+      await api.deleteTeam(team.id);
+      if (editingId === team.id) resetForm();
+      setMsg('Team deleted');
+      await load();
+    } catch (e: any) {
+      setMsg(e.message || 'Delete failed');
+    }
+  }
+
+  const availableUsers = users.filter((u) => !memberIds.includes(u.id));
+
+  return (
+    <AppShell navigation={navigation} active="Teams" title="Teams">
+      <FlatList
+        data={teams}
+        keyExtractor={(item) => item.id}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />}
+        contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
+        ListHeaderComponent={
+          <View style={{ marginBottom: 12 }}>
+            <Text style={styles.sub}>
+              Non-admins only see teams they belong to. Admins (or roles with “view all teams”) see every team.
+            </Text>
+            {!!msg && <Text style={styles.msg}>{msg}</Text>}
+            {can('teams.create') && !showForm ? (
+              <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>
+                <Text style={styles.btnText}>+ Create team</Text>
+              </TouchableOpacity>
+            ) : null}
+            {showForm ? (
+              <View style={styles.form}>
+                <Text style={styles.formTitle}>{editingId ? 'Edit team' : 'New team'}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Team name"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <Text style={styles.label}>Select users for this team</Text>
+                {Platform.OS === 'web' ? (
+                  <select
+                    value={pickerValue}
+                    onChange={(e: any) => {
+                      const id = e.target.value;
+                      setPickerValue(id);
+                      if (id) addFromPicker(id);
+                    }}
+                    style={{
+                      width: '100%',
+                      marginBottom: 10,
+                      padding: 10,
+                      borderRadius: 10,
+                      backgroundColor: colors.bgElevated,
+                      color: colors.text,
+                      border: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    <option value="">Choose a user…</option>
+                    {availableUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {(u.firstName || u.name) + ' ' + (u.lastName || '')} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <View style={styles.chips}>
+                    {availableUsers.map((u) => (
+                      <TouchableOpacity
+                        key={u.id}
+                        style={styles.chip}
+                        onPress={() => addFromPicker(u.id)}
+                      >
+                        <Text style={styles.chipText}>
+                          + {u.firstName || u.name} {u.lastName || ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <Text style={styles.label}>Selected members</Text>
+                <View style={styles.chips}>
+                  {memberIds.map((id) => {
+                    const u = users.find((x) => x.id === id);
+                    return (
+                      <TouchableOpacity
+                        key={id}
+                        style={[styles.chip, styles.chipOn]}
+                        onPress={() => setMemberIds((ids) => ids.filter((x) => x !== id))}
+                      >
+                        <Text style={[styles.chipText, styles.chipTextOn]}>
+                          {u ? `${u.firstName || u.name} ${u.lastName || ''}`.trim() : id} ×
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity style={styles.btn} onPress={create}>
+                  <Text style={styles.btnText}>{editingId ? 'Save team' : 'Create team'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondary} onPress={resetForm}>
+                  <Text style={styles.secondaryText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+          </View>
+        }
+        ListEmptyComponent={<Text style={styles.empty}>No teams visible for your account.</Text>}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{item.name}</Text>
+            <Text style={styles.meta}>
+              Members:{'\n'}
+              {(item.members || [])
+                .map((m: any) => `${m.firstName || m.name} ${m.lastName || ''} <${m.email}>`)
+                .join('\n') || '—'}
+            </Text>
+            <View style={styles.actions}>
+              {can('teams.edit') ? (
+                <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
+                  <Text style={styles.miniText}>Edit</Text>
+                </TouchableOpacity>
+              ) : null}
+              {can('teams.delete') ? (
+                <TouchableOpacity style={[styles.mini, styles.danger]} onPress={() => removeTeam(item)}>
+                  <Text style={styles.miniText}>Delete</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+        )}
+      />
+    </AppShell>
+  );
+}
+
+const styles = StyleSheet.create({
+  sub: { color: colors.textMuted, marginBottom: 12, lineHeight: 20 },
+  msg: {
+    color: colors.accent,
+    backgroundColor: colors.bgCard,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  form: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 8,
+  },
+  formTitle: { color: colors.text, fontWeight: '700', marginBottom: 10, fontSize: 16 },
+  label: { color: colors.textMuted, marginBottom: 8, marginTop: 8, fontWeight: '600' },
+  input: {
+    backgroundColor: colors.bgElevated,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    color: colors.text,
+    marginBottom: 8,
+  },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  chip: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: colors.bgElevated,
+  },
+  chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipText: { color: colors.text, fontSize: 12 },
+  chipTextOn: { color: '#062016', fontWeight: '700' },
+  btn: {
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  btnText: { color: '#062016', fontWeight: '800' },
+  secondary: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  secondaryText: { color: colors.accent, fontWeight: '700' },
+  card: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
+  meta: { color: colors.textMuted, marginTop: 6, lineHeight: 20 },
+  actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  mini: {
+    backgroundColor: colors.accentDim,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  danger: { backgroundColor: colors.danger },
+  miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  empty: { color: colors.textMuted, textAlign: 'center', marginTop: 24 },
+});

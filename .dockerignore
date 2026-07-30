@@ -1,0 +1,8 @@
+node_modules/
+deps/
+data/
+uploads/
+*.log
+.env
+dist/
+server-bundle/

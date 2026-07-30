@@ -1,0 +1,17 @@
+{
+  "name": "TeamTask",
+  "short_name": "TeamTask",
+  "description": "Shared team tasks, checklists, and notifications",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0F1C17",
+  "theme_color": "#0F1C17",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}

@@ -1,0 +1,4 @@
+{
+  "apiUrl": "",
+  "_comment": "Paste your cloud TeamTask URL here (e.g. https://teamtask-xxxx.onrender.com) then rebuild the EXE. Leave empty for local-hub mode."
+}
