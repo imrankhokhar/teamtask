@@ -87,6 +87,16 @@ export const api = {
     request('/api/auth/register', { method: 'POST', body, token: null }),
   login: (body: { email: string; password: string }) =>
     request('/api/auth/login', { method: 'POST', body, token: null }),
+  forgotPassword: (email: string) =>
+    request('/api/auth/forgot-password', {
+      method: 'POST',
+      body: { email },
+      token: null,
+    }),
+  resetPassword: (body: { email: string; code: string; newPassword: string }) =>
+    request('/api/auth/reset-password', { method: 'POST', body, token: null }),
+  changePassword: (body: { currentPassword: string; newPassword: string }) =>
+    request('/api/me/password', { method: 'POST', body }),
   me: () => request('/api/me'),
   setPushToken: (pushToken: string | null) =>
     request('/api/me/push-token', { method: 'POST', body: { pushToken } }),

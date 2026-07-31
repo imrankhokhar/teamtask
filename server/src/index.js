@@ -254,6 +254,111 @@ app.post('/api/auth/login', (req, res) => {
   res.json({ token: signToken(user), user: publicUser(user, db) });
 });
 
+/** 6-digit reset code; emailed when SMTP works, returned when mail can't send. */
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  if (!email) return res.status(400).json({ error: 'email required' });
+
+  const generic = {
+    ok: true,
+    message: 'If that account exists, a reset code was sent.',
+  };
+
+  const db = readDb();
+  const user = db.users.find((u) => u.email.toLowerCase() === email);
+  if (!user) return res.json(generic);
+
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+  updateDb((store) => {
+    const u = store.users.find((x) => x.id === user.id);
+    if (!u) return;
+    u.resetCodeHash = bcrypt.hashSync(code, 10);
+    u.resetCodeExpiresAt = expiresAt;
+  });
+
+  const mailResult = await sendMail({
+    to: user.email,
+    subject: '[TeamTask] Password reset code',
+    text:
+      `Hi ${user.firstName || user.name || 'there'},\n\n` +
+      `Your TeamTask password reset code is: ${code}\n\n` +
+      `It expires in 30 minutes. If you did not request this, ignore this email.\n\n— TeamTask`,
+  });
+
+  if (mailResult?.skipped) {
+    // ponytail: no SMTP → surface code in UI so local reset still works; upgrade = require SMTP only
+    return res.json({
+      ok: true,
+      message: 'Email is not configured. Use the code below to reset your password.',
+      code,
+    });
+  }
+
+  res.json(generic);
+});
+
+app.post('/api/auth/reset-password', (req, res) => {
+  const email = String(req.body?.email || '').trim().toLowerCase();
+  const code = String(req.body?.code || '').trim();
+  const newPassword = String(req.body?.newPassword || '');
+
+  if (!email || !code || !newPassword) {
+    return res.status(400).json({ error: 'email, code, and newPassword required' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  const db = readDb();
+  const user = db.users.find((u) => u.email.toLowerCase() === email);
+  if (!user?.resetCodeHash || !user.resetCodeExpiresAt) {
+    return res.status(400).json({ error: 'Invalid or expired reset code' });
+  }
+  if (new Date(user.resetCodeExpiresAt).getTime() < Date.now()) {
+    return res.status(400).json({ error: 'Reset code expired. Request a new one.' });
+  }
+  if (!bcrypt.compareSync(code, user.resetCodeHash)) {
+    return res.status(400).json({ error: 'Invalid or expired reset code' });
+  }
+
+  updateDb((store) => {
+    const u = store.users.find((x) => x.id === user.id);
+    if (!u) return;
+    u.passwordHash = bcrypt.hashSync(newPassword, 10);
+    u.resetCodeHash = null;
+    u.resetCodeExpiresAt = null;
+  });
+
+  res.json({ ok: true, message: 'Password updated. You can sign in now.' });
+});
+
+app.post('/api/me/password', authRequired, (req, res) => {
+  const currentPassword = String(req.body?.currentPassword || '');
+  const newPassword = String(req.body?.newPassword || '');
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ error: 'currentPassword and newPassword required' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters' });
+  }
+
+  const db = readDb();
+  const user = db.users.find((u) => u.id === req.user.id);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (!bcrypt.compareSync(currentPassword, user.passwordHash)) {
+    return res.status(400).json({ error: 'Current password is incorrect' });
+  }
+
+  updateDb((store) => {
+    const u = store.users.find((x) => x.id === user.id);
+    if (u) u.passwordHash = bcrypt.hashSync(newPassword, 10);
+  });
+
+  res.json({ ok: true, message: 'Password changed' });
+});
+
 app.get('/api/me', authRequired, (req, res) => {
   const db = readDb();
   const user = db.users.find((u) => u.id === req.user.id);

@@ -20,6 +20,7 @@ import EmailSettingsScreen from './src/screens/EmailSettingsScreen';
 import EmailTemplatesScreen from './src/screens/EmailTemplatesScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import ConnectionScreen from './src/screens/ConnectionScreen';
+import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import { refreshApiUrl } from './src/api';
 
 const Stack = createNativeStackNavigator();
@@ -69,6 +70,7 @@ function RootNav() {
           <Stack.Screen name="Roles" component={RolesScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
           <Stack.Screen name="Sounds" component={SoundsScreen} />
           <Stack.Screen name="EmailSettings" component={EmailSettingsScreen} />
           <Stack.Screen name="EmailTemplates" component={EmailTemplatesScreen} />

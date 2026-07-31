@@ -5,6 +5,7 @@ import { colors } from '../theme';
 import AppShell from '../components/AppShell';
 
 const LINKS = [
+  { key: 'ChangePassword', label: 'Change password', desc: 'Update your account password' },
   { key: 'Sounds', label: 'Notification sounds', desc: 'Tones for alerts and reminders' },
   { key: 'EmailSettings', label: 'Email / SMTP', desc: 'Configure outbound email' },
   {
