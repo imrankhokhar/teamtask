@@ -14,9 +14,12 @@ import { api, TASK_STATUSES, statusLabel } from '../api';
 import { colors, statusColors } from '../theme';
 import { useAuth } from '../auth';
 
+import { useConfirm } from '../components/ConfirmModal';
+
 export default function TaskDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
   const { user, can } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const [task, setTask] = useState<any>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [newCheck, setNewCheck] = useState('');
@@ -158,10 +161,11 @@ export default function TaskDetailScreen({ route, navigation }: any) {
   }
 
   async function deleteTask() {
-    const ok =
-      typeof window !== 'undefined' && window.confirm
-        ? window.confirm(`Delete task "${task.title}"?`)
-        : true;
+    const ok = await confirm({
+      title: 'Delete task',
+      message: `Delete task "${task.title}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
     if (!ok) return;
     try {
       await api.deleteTask(id);
@@ -180,6 +184,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
   }
 
   return (
+    <>
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
@@ -318,6 +323,8 @@ export default function TaskDetailScreen({ route, navigation }: any) {
         </TouchableOpacity>
       ) : null}
     </ScrollView>
+    {dialog}
+    </>
   );
 }
 

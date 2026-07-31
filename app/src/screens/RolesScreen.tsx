@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   RefreshControl,
   Platform,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -15,6 +14,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { colors } from '../theme';
 import AppShell from '../components/AppShell';
+import { useConfirm } from '../components/ConfirmModal';
 
 function Field({
   value,
@@ -66,6 +66,7 @@ function Field({
 
 export default function RolesScreen({ navigation }: any) {
   const { can } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const [roles, setRoles] = useState<any[]>([]);
   const [modules, setModules] = useState<any[]>([]);
   const [actions, setActions] = useState<any[]>([]);
@@ -167,15 +168,11 @@ export default function RolesScreen({ navigation }: any) {
   }
 
   async function removeRole(role: any) {
-    const ok =
-      Platform.OS === 'web'
-        ? window.confirm(`Delete role "${role.name}"?`)
-        : await new Promise<boolean>((resolve) => {
-            Alert.alert('Delete role', `Delete "${role.name}"?`, [
-              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
-            ]);
-          });
+    const ok = await confirm({
+      title: 'Delete role',
+      message: `Delete role "${role.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
     if (!ok) return;
     try {
       await api.deleteRole(role.id);
@@ -290,6 +287,7 @@ export default function RolesScreen({ navigation }: any) {
           ))}
         </View>
       </ScrollView>
+      {dialog}
     </AppShell>
   );
 }

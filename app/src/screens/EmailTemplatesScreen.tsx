@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { colors } from '../theme';
+import { useConfirm } from '../components/ConfirmModal';
 
 function Field({
   value,
@@ -64,6 +65,7 @@ function Field({
 
 export default function EmailTemplatesScreen({ navigation }: any) {
   const { can, isAdmin } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const [templates, setTemplates] = useState<any[]>([]);
   const [placeholders, setPlaceholders] = useState<string[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -120,10 +122,11 @@ export default function EmailTemplatesScreen({ navigation }: any) {
 
   async function resetAll() {
     if (!canEdit) return;
-    const ok =
-      Platform.OS === 'web'
-        ? window.confirm('Reset all email templates to defaults?')
-        : true;
+    const ok = await confirm({
+      title: 'Reset templates',
+      message: 'Reset all email templates to defaults? Your custom wording will be lost.',
+      confirmLabel: 'Reset',
+    });
     if (!ok) return;
     try {
       setBusy(true);
@@ -146,6 +149,7 @@ export default function EmailTemplatesScreen({ navigation }: any) {
   ];
 
   return (
+    <>
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
@@ -235,6 +239,8 @@ export default function EmailTemplatesScreen({ navigation }: any) {
         <Text style={styles.hint}>Only admins can edit templates.</Text>
       )}
     </ScrollView>
+    {dialog}
+    </>
   );
 }
 

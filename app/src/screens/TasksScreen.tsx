@@ -13,9 +13,11 @@ import { api, statusLabel } from '../api';
 import { colors, statusColors } from '../theme';
 import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
+import { useConfirm } from '../components/ConfirmModal';
 
 export default function TasksScreen({ navigation }: any) {
   const { can } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const [tasks, setTasks] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -72,10 +74,11 @@ export default function TasksScreen({ navigation }: any) {
                   style={styles.deleteLinkWrap}
                   onPress={async (e) => {
                     e?.stopPropagation?.();
-                    const ok =
-                      typeof window !== 'undefined' && window.confirm
-                        ? window.confirm(`Delete task "${item.title}"?`)
-                        : true;
+                    const ok = await confirm({
+                      title: 'Delete task',
+                      message: `Delete task "${item.title}"? This cannot be undone.`,
+                      confirmLabel: 'Delete',
+                    });
                     if (!ok) return;
                     try {
                       await api.deleteTask(item.id);
@@ -105,6 +108,7 @@ export default function TasksScreen({ navigation }: any) {
           </View>
         ) : null}
       </View>
+      {dialog}
     </AppShell>
   );
 }

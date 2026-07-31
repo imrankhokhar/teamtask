@@ -7,8 +7,6 @@ import {
   TextInput,
   TouchableOpacity,
   RefreshControl,
-  Platform,
-  Alert,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
@@ -16,9 +14,11 @@ import { useAuth } from '../auth';
 import { colors } from '../theme';
 import AppShell from '../components/AppShell';
 import PasswordField from '../components/PasswordField';
+import { useConfirm } from '../components/ConfirmModal';
 
 export default function UsersScreen({ navigation }: any) {
   const { can } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -119,15 +119,11 @@ export default function UsersScreen({ navigation }: any) {
   }
 
   async function removeUser(u: any) {
-    const ok =
-      Platform.OS === 'web'
-        ? window.confirm(`Delete user ${u.email}?`)
-        : await new Promise<boolean>((resolve) => {
-            Alert.alert('Delete user', `Delete ${u.email}?`, [
-              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
-            ]);
-          });
+    const ok = await confirm({
+      title: 'Delete user',
+      message: `Delete user ${u.email}? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
     if (!ok) return;
     try {
       await api.deleteUser(u.id);
@@ -233,6 +229,7 @@ export default function UsersScreen({ navigation }: any) {
           </View>
         )}
       />
+      {dialog}
     </AppShell>
   );
 }

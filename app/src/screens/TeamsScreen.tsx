@@ -15,9 +15,11 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { colors } from '../theme';
 import AppShell from '../components/AppShell';
+import { useConfirm } from '../components/ConfirmModal';
 
 export default function TeamsScreen({ navigation }: any) {
   const { can } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const [teams, setTeams] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -108,15 +110,11 @@ export default function TeamsScreen({ navigation }: any) {
   }
 
   async function removeTeam(team: any) {
-    const ok =
-      Platform.OS === 'web'
-        ? window.confirm(`Delete team "${team.name}"?`)
-        : await new Promise<boolean>((resolve) => {
-            Alert.alert('Delete team', `Delete "${team.name}"?`, [
-              { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
-            ]);
-          });
+    const ok = await confirm({
+      title: 'Delete team',
+      message: `Delete team "${team.name}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
     if (!ok) return;
     try {
       await api.deleteTeam(team.id);
@@ -251,6 +249,7 @@ export default function TeamsScreen({ navigation }: any) {
           </View>
         )}
       />
+      {dialog}
     </AppShell>
   );
 }
