@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth';
 import { colors } from '../theme';
+import PasswordField from '../components/PasswordField';
 
 function showError(message: string, setError: (m: string) => void) {
   setError(message);
@@ -77,11 +78,8 @@ export default function LoginScreen({ navigation }: any) {
           value={email}
           onChangeText={setEmail}
         />
-        <TextInput
-          style={styles.input}
+        <PasswordField
           placeholder="Password"
-          placeholderTextColor={colors.textMuted}
-          secureTextEntry
           value={password}
           onChangeText={setPassword}
         />

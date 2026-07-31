@@ -16,7 +16,7 @@ import { useAuth } from '../auth';
 
 export default function TaskDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const [task, setTask] = useState<any>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [newCheck, setNewCheck] = useState('');
@@ -144,13 +144,9 @@ export default function TaskDetailScreen({ route, navigation }: any) {
   }
 
   async function deleteTask() {
-    if (task.status !== 'completed') {
-      Alert.alert('Only completed tasks can be deleted from here. Mark completed first, or ask admin.');
-      return;
-    }
     const ok =
       typeof window !== 'undefined' && window.confirm
-        ? window.confirm(`Delete completed task "${task.title}"?`)
+        ? window.confirm(`Delete task "${task.title}"?`)
         : true;
     if (!ok) return;
     try {
@@ -179,7 +175,17 @@ export default function TaskDetailScreen({ route, navigation }: any) {
         <Text style={styles.back}>← Back</Text>
       </TouchableOpacity>
 
-      <Text style={styles.title}>{task.title}</Text>
+      <View style={styles.titleRow}>
+        <Text style={[styles.title, { flex: 1 }]}>{task.title}</Text>
+        {can('tasks.edit') ? (
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => navigation.navigate('CreateTask', { taskId: id })}
+          >
+            <Text style={styles.editBtnText}>Edit</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
       <Text style={styles.desc}>{task.description || 'No description'}</Text>
 
       <View style={[styles.statusPill, { backgroundColor: statusColors[task.status] || colors.textMuted }]}>
@@ -272,11 +278,11 @@ export default function TaskDetailScreen({ route, navigation }: any) {
 
       <Text style={styles.hint}>Signed in as {user?.name}. Only assigned users receive notifications.</Text>
 
-      {task.status === 'completed' && (
+      {can('tasks.delete') ? (
         <TouchableOpacity style={styles.deleteBtn} onPress={deleteTask}>
-          <Text style={styles.deleteBtnText}>Delete completed task</Text>
+          <Text style={styles.deleteBtnText}>Delete task</Text>
         </TouchableOpacity>
-      )}
+      ) : null}
     </ScrollView>
   );
 }
@@ -284,7 +290,17 @@ export default function TaskDetailScreen({ route, navigation }: any) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   back: { color: colors.info, marginTop: 48, marginBottom: 8 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   title: { color: colors.text, fontSize: 26, fontWeight: '800' },
+  editBtn: {
+    backgroundColor: colors.bgCard,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  editBtnText: { color: colors.accent, fontWeight: '700' },
   desc: { color: colors.textMuted, marginTop: 8, marginBottom: 12 },
   statusPill: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   statusPillText: { color: '#062016', fontWeight: '800', textTransform: 'capitalize' },

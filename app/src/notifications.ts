@@ -58,6 +58,7 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
   const { token, settings, setSettings } = useAuth();
   const soundRef = useRef<Audio.Sound | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const hasPushRef = useRef(false);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
@@ -68,6 +69,7 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
       if (!token) return;
       try {
         const pushToken = await registerForPush();
+        hasPushRef.current = Boolean(pushToken);
         if (!cancelled && pushToken) await api.setPushToken(pushToken);
       } catch (e) {
         console.warn('Push registration skipped:', e);
@@ -90,7 +92,7 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
             for (const n of msg.items) {
               onNotify?.(n);
               const tone = toneForNotification(n.type, settingsRef.current);
-              await presentLocal(n, tone);
+              await presentLocal(n, tone, hasPushRef.current);
             }
           }
         } catch {
@@ -108,7 +110,8 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
 
   async function presentLocal(
     n: { title: string; body: string; type?: string },
-    ringtoneUrl: string | null | undefined
+    ringtoneUrl: string | null | undefined,
+    hasPush: boolean
   ) {
     try {
       if (ringtoneUrl) {
@@ -140,6 +143,9 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
       }
       return;
     }
+
+    // Native: Expo push already shows a banner — don't schedule a second local one
+    if (hasPush) return;
 
     await Notifications.scheduleNotificationAsync({
       content: {

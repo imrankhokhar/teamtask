@@ -11,6 +11,7 @@ import {
 import { api } from '../api';
 import { colors } from '../theme';
 import { useAuth } from '../auth';
+import PasswordField from '../components/PasswordField';
 
 export default function EmailSettingsScreen({ navigation }: any) {
   const { user } = useAuth();
@@ -195,8 +196,11 @@ export default function EmailSettingsScreen({ navigation }: any) {
       <TextInput style={styles.input} value={form.user} onChangeText={(v) => setForm((f) => ({ ...f, user: v }))} placeholder="you@gmail.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
 
       <Text style={styles.label}>Password / app password {form.hasPassword ? '(saved)' : ''}</Text>
-      <TextInput style={styles.input} value={form.pass} onChangeText={(v) => setForm((f) => ({ ...f, pass: v }))} placeholder={form.hasPassword ? 'Leave blank to keep saved' : 'App password'} placeholderTextColor={colors.textMuted} secureTextEntry autoCapitalize="none" />
-
+      <PasswordField
+        value={form.pass}
+        onChangeText={(v) => setForm((f) => ({ ...f, pass: v }))}
+        placeholder={form.hasPassword ? 'Leave blank to keep saved' : 'App password'}
+      />
       <Text style={styles.label}>From address</Text>
       <TextInput style={styles.input} value={form.from} onChangeText={(v) => setForm((f) => ({ ...f, from: v }))} placeholder="same as username" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
 

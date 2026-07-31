@@ -67,14 +67,14 @@ export default function TasksScreen({ navigation }: any) {
                 {(item.checklist || []).length} checklist ·{' '}
                 {(item.assignees || []).length} people · {(item.teams || []).length} teams
               </Text>
-              {item.status === 'completed' && can('tasks.delete') && (
+              {can('tasks.delete') && (
                 <TouchableOpacity
                   style={styles.deleteLinkWrap}
                   onPress={async (e) => {
                     e?.stopPropagation?.();
                     const ok =
                       typeof window !== 'undefined' && window.confirm
-                        ? window.confirm(`Delete completed task "${item.title}"?`)
+                        ? window.confirm(`Delete task "${item.title}"?`)
                         : true;
                     if (!ok) return;
                     try {
@@ -85,7 +85,7 @@ export default function TasksScreen({ navigation }: any) {
                     }
                   }}
                 >
-                  <Text style={styles.deleteLink}>Delete completed</Text>
+                  <Text style={styles.deleteLink}>Delete</Text>
                 </TouchableOpacity>
               )}
             </TouchableOpacity>
@@ -94,7 +94,12 @@ export default function TasksScreen({ navigation }: any) {
 
         {can('tasks.create') ? (
           <View style={styles.fabRow}>
-            <TouchableOpacity style={styles.fab} onPress={() => navigation.navigate('CreateTask')}>
+            <TouchableOpacity
+              style={styles.fab}
+              onPress={() =>
+                navigation.navigate({ name: 'CreateTask', params: { taskId: undefined }, merge: false })
+              }
+            >
               <Text style={styles.fabText}>+ Task</Text>
             </TouchableOpacity>
           </View>

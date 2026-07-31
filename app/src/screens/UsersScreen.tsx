@@ -15,6 +15,7 @@ import { api } from '../api';
 import { useAuth } from '../auth';
 import { colors } from '../theme';
 import AppShell from '../components/AppShell';
+import PasswordField from '../components/PasswordField';
 
 export default function UsersScreen({ navigation }: any) {
   const { can } = useAuth();
@@ -178,13 +179,11 @@ export default function UsersScreen({ navigation }: any) {
                   keyboardType="email-address"
                   placeholderTextColor={colors.textMuted}
                 />
-                <TextInput
-                  style={styles.input}
+                <PasswordField
+                  containerStyle={{ marginBottom: 8 }}
                   value={password}
                   onChangeText={setPassword}
                   placeholder={editingId ? 'New password (optional)' : 'Password'}
-                  secureTextEntry
-                  placeholderTextColor={colors.textMuted}
                 />
                 <Text style={styles.label}>Role</Text>
                 <View style={styles.chips}>

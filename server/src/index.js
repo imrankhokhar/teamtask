@@ -704,6 +704,7 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
   });
 
   try {
+    // One notify on create — skip separate reminder_set (due reminders still fire later)
     await notifyTaskUsers(task.id, {
       type: 'task_assigned',
       title: 'New task assigned',
@@ -713,21 +714,8 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
       emailVars: { taskTitle: task.title },
     });
 
-    if (reminderAt) {
-      await notifyTaskUsers(task.id, {
-        type: 'reminder_set',
-        title: 'Reminder scheduled',
-        body: `Reminder for "${task.title}" set for ${new Date(reminderAt).toLocaleString()}`,
-        excludeUserId: null,
-        actorUserId: req.user.id,
-        emailVars: {
-          taskTitle: task.title,
-          reminderAt: new Date(reminderAt).toLocaleString(),
-        },
-      });
-      if (new Date(reminderAt).getTime() <= Date.now()) {
-        await processDueReminders();
-      }
+    if (reminderAt && new Date(reminderAt).getTime() <= Date.now()) {
+      await processDueReminders();
     }
   } catch (err) {
     console.error('Notify after create failed:', err.message);

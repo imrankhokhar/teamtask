@@ -38,7 +38,18 @@ function parseReminderLocal(raw: string): Date {
   return fallback;
 }
 
-export default function CreateTaskScreen({ navigation }: any) {
+function formatReminderLocal(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+export default function CreateTaskScreen({ navigation, route }: any) {
+  const taskId: string | undefined = route?.params?.taskId;
+  const editing = Boolean(taskId);
+
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<string>('pending');
@@ -52,6 +63,7 @@ export default function CreateTaskScreen({ navigation }: any) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [msgError, setMsgError] = useState(false);
+  const [loading, setLoading] = useState(editing);
 
   useEffect(() => {
     (async () => {
@@ -59,12 +71,25 @@ export default function CreateTaskScreen({ navigation }: any) {
         const [u, t] = await Promise.all([api.users(), api.teams()]);
         setUsers(u.users || []);
         setTeams(t.teams || []);
+
+        if (taskId) {
+          const data = await api.task(taskId);
+          const task = data.task;
+          setTitle(task.title || '');
+          setDescription(task.description || '');
+          setStatus(task.status || 'pending');
+          setAssigneeIds((task.assignees || []).map((a: any) => a.id));
+          setTeamIds((task.teams || []).map((tm: any) => tm.id));
+          setReminderLocal(formatReminderLocal(task.reminderAt));
+        }
       } catch (e: any) {
         setMsgError(true);
-        setMsg(e.message || 'Failed to load users/teams');
+        setMsg(e.message || 'Failed to load');
+      } finally {
+        setLoading(false);
       }
     })();
-  }, []);
+  }, [taskId]);
 
   function toggle(list: string[], id: string, setter: (v: string[]) => void) {
     setter(list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
@@ -82,31 +107,52 @@ export default function CreateTaskScreen({ navigation }: any) {
     }
     try {
       setBusy(true);
-      showMsg('Saving task…', false);
+      showMsg(editing ? 'Updating task…' : 'Saving task…', false);
       let reminderAt: string | null = null;
       if (reminderLocal.trim()) {
         const d = parseReminderLocal(reminderLocal);
         reminderAt = d.toISOString();
       }
-      await api.createTask({
-        title: title.trim(),
-        description,
-        status,
-        assigneeIds,
-        teamIds,
-        checklist,
-        reminderAt,
-      });
-      showMsg('Task saved. Returning to list…', false);
+
+      if (editing && taskId) {
+        await api.updateTask(taskId, {
+          title: title.trim(),
+          description,
+          status,
+          assigneeIds,
+          teamIds,
+          reminderAt,
+        });
+        showMsg('Task updated.', false);
+      } else {
+        await api.createTask({
+          title: title.trim(),
+          description,
+          status,
+          assigneeIds,
+          teamIds,
+          checklist,
+          reminderAt,
+        });
+        showMsg('Task saved. Returning to list…', false);
+      }
       setTimeout(() => {
         if (navigation.canGoBack?.()) navigation.goBack();
         else navigation.navigate('Tasks');
       }, 400);
     } catch (e: any) {
-      showMsg(e.message || 'Failed to create task', true);
+      showMsg(e.message || (editing ? 'Failed to update task' : 'Failed to create task'), true);
     } finally {
       setBusy(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ color: colors.textMuted }}>Loading…</Text>
+      </View>
+    );
   }
 
   return (
@@ -124,7 +170,7 @@ export default function CreateTaskScreen({ navigation }: any) {
         <Text style={styles.back}>← Back to tasks</Text>
       </TouchableOpacity>
 
-      <Text style={styles.h1}>Create task</Text>
+      <Text style={styles.h1}>{editing ? 'Edit task' : 'Create task'}</Text>
 
       {!!msg && (
         <Text style={[styles.banner, msgError ? styles.bannerErr : styles.bannerOk]}>{msg}</Text>
@@ -192,31 +238,35 @@ export default function CreateTaskScreen({ navigation }: any) {
         ))}
       </View>
 
-      <Text style={styles.label}>Checklist</Text>
-      <View style={styles.row}>
-        <TextInput
-          style={[styles.input, { flex: 1 }]}
-          value={checklistText}
-          onChangeText={setChecklistText}
-          placeholder="Add checklist point"
-          placeholderTextColor={colors.textMuted}
-        />
-        <TouchableOpacity
-          style={styles.addBtn}
-          onPress={() => {
-            if (!checklistText.trim()) return;
-            setChecklist((c) => [...c, checklistText.trim()]);
-            setChecklistText('');
-          }}
-        >
-          <Text style={styles.addBtnText}>Add</Text>
-        </TouchableOpacity>
-      </View>
-      {checklist.map((c, i) => (
-        <Text key={i} style={styles.checkLine}>
-          • {c}
-        </Text>
-      ))}
+      {!editing && (
+        <>
+          <Text style={styles.label}>Checklist</Text>
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              value={checklistText}
+              onChangeText={setChecklistText}
+              placeholder="Add checklist point"
+              placeholderTextColor={colors.textMuted}
+            />
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => {
+                if (!checklistText.trim()) return;
+                setChecklist((c) => [...c, checklistText.trim()]);
+                setChecklistText('');
+              }}
+            >
+              <Text style={styles.addBtnText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+          {checklist.map((c, i) => (
+            <Text key={i} style={styles.checkLine}>
+              • {c}
+            </Text>
+          ))}
+        </>
+      )}
 
       <Text style={styles.label}>Reminder (local time on this device)</Text>
       <TextInput
@@ -228,12 +278,15 @@ export default function CreateTaskScreen({ navigation }: any) {
         autoCapitalize="none"
       />
       <Text style={styles.hint}>
-        Use two-digit hour if needed (07:40). Assignees get an alert when set and when due.
+        Use two-digit hour if needed (07:40). Assignees are notified when the task is created
+        {editing ? ' or updated' : ''} and when a reminder is due.
         {Platform.OS === 'web' ? ' Desktop also shows a system notification when allowed.' : ''}
       </Text>
 
       <TouchableOpacity style={styles.save} onPress={save} disabled={busy}>
-        <Text style={styles.saveText}>{busy ? 'Saving…' : 'Create & notify assignees'}</Text>
+        <Text style={styles.saveText}>
+          {busy ? 'Saving…' : editing ? 'Save changes' : 'Create & notify assignees'}
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );

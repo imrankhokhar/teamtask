@@ -113,9 +113,9 @@ async function notifyTaskUsers(taskId, { type, title, body, excludeUserId, actor
     }
   });
 
-  const payload = { type: 'notification', items: created };
-  for (const userId of recipientIds) {
-    pushRealtime(userId, payload);
+  // Send each user only their own notification (not the full recipient list)
+  for (const n of created) {
+    pushRealtime(n.userId, { type: 'notification', items: [n] });
   }
 
   await sendExpoPush(pushTokens, title, body, { taskId, type });
