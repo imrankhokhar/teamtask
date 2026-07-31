@@ -143,29 +143,89 @@ async function processDueReminders() {
   const due = [];
   updateDb((db) => {
     for (const task of db.tasks) {
-      if (
-        task.reminderAt &&
-        !task.reminderNotified &&
-        new Date(task.reminderAt).getTime() <= now
-      ) {
-        task.reminderNotified = true;
-        due.push({ ...task });
+      ensureTaskReminders(task);
+      for (const rem of task.reminders) {
+        if (
+          rem.at &&
+          !rem.notified &&
+          new Date(rem.at).getTime() <= now
+        ) {
+          rem.notified = true;
+          due.push({
+            taskId: task.id,
+            title: task.title,
+            at: rem.at,
+          });
+        }
       }
+      syncLegacyReminderFields(task);
     }
   });
-  for (const task of due) {
-    await notifyTaskUsers(task.id, {
+  for (const item of due) {
+    await notifyTaskUsers(item.taskId, {
       type: 'reminder_due',
       title: 'Task reminder',
-      body: `Reminder: "${task.title}"`,
+      body: `Reminder: "${item.title}"`,
       excludeUserId: null,
       emailVars: {
-        taskTitle: task.title,
-        reminderAt: new Date(task.reminderAt).toLocaleString(),
+        taskTitle: item.title,
+        reminderAt: new Date(item.at).toLocaleString(),
       },
     });
   }
   return due.length;
+}
+
+/** Migrate legacy reminderAt into reminders[]; keep both in sync. */
+function ensureTaskReminders(task) {
+  if (!Array.isArray(task.reminders)) task.reminders = [];
+  if (
+    task.reminderAt &&
+    !task.reminders.some((r) => r.at === task.reminderAt)
+  ) {
+    task.reminders.push({
+      id: uuid(),
+      at: task.reminderAt,
+      notified: Boolean(task.reminderNotified),
+    });
+  }
+  return task.reminders;
+}
+
+function syncLegacyReminderFields(task) {
+  ensureTaskReminders(task);
+  const pending = task.reminders
+    .filter((r) => r.at && !r.notified)
+    .sort((a, b) => new Date(a.at) - new Date(b.at));
+  if (pending.length) {
+    task.reminderAt = pending[0].at;
+    task.reminderNotified = false;
+  } else if (task.reminders.length) {
+    const sorted = [...task.reminders].sort(
+      (a, b) => new Date(a.at) - new Date(b.at)
+    );
+    task.reminderAt = sorted[sorted.length - 1].at;
+    task.reminderNotified = true;
+  } else {
+    task.reminderAt = null;
+    task.reminderNotified = false;
+  }
+}
+
+function buildRemindersFromAts(ats, existing = []) {
+  const list = [];
+  const seen = new Set();
+  for (const raw of ats || []) {
+    if (raw == null || raw === '') continue;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) continue;
+    const at = d.toISOString();
+    if (seen.has(at)) continue;
+    seen.add(at);
+    const prev = existing.find((r) => r.at === at);
+    list.push(prev || { id: uuid(), at, notified: false });
+  }
+  return list.sort((a, b) => new Date(a.at) - new Date(b.at));
 }
 
 function enrichTask(db, task) {
@@ -176,8 +236,23 @@ function enrichTask(db, task) {
     .filter((a) => a.taskId === task.id)
     .map((a) => a.teamId);
 
+  const reminders =
+    Array.isArray(task.reminders) && task.reminders.length
+      ? [...task.reminders].sort((a, b) => new Date(a.at) - new Date(b.at))
+      : task.reminderAt
+        ? [
+            {
+              id: 'legacy',
+              at: task.reminderAt,
+              notified: Boolean(task.reminderNotified),
+            },
+          ]
+        : [];
+
   return {
     ...task,
+    reminders,
+    reminderAt: task.reminderAt || reminders.find((r) => !r.notified)?.at || reminders[0]?.at || null,
     reporter: publicUser(db.users.find((u) => u.id === task.reporterId)),
     assignees: db.users.filter((u) => assigneeIds.includes(u.id)).map(publicUser),
     teams: db.teams.filter((t) => teamIds.includes(t.id)),
@@ -761,12 +836,20 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
     teamIds = [],
     checklist = [],
     reminderAt = null,
+    reminders: remindersInput,
   } = req.body || {};
 
   if (!title) return res.status(400).json({ error: 'title required' });
   if (!TASK_STATUSES.includes(status)) {
     return res.status(400).json({ error: `status must be one of: ${TASK_STATUSES.join(', ')}` });
   }
+
+  const reminderAts = Array.isArray(remindersInput)
+    ? remindersInput
+    : reminderAt
+      ? [reminderAt]
+      : [];
+  const reminders = buildRemindersFromAts(reminderAts);
 
   const now = new Date().toISOString();
   const task = {
@@ -775,11 +858,13 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
     description: String(description || ''),
     status,
     reporterId: req.user.id,
-    reminderAt,
+    reminders,
+    reminderAt: null,
     reminderNotified: false,
     createdAt: now,
     updatedAt: now,
   };
+  syncLegacyReminderFields(task);
 
   updateDb((db) => {
     db.tasks.push(task);
@@ -819,7 +904,8 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
       emailVars: { taskTitle: task.title },
     });
 
-    if (reminderAt && new Date(reminderAt).getTime() <= Date.now()) {
+    const anyDue = reminders.some((r) => new Date(r.at).getTime() <= Date.now());
+    if (anyDue) {
       await processDueReminders();
     }
   } catch (err) {
@@ -847,12 +933,13 @@ app.patch('/api/tasks/:id', authRequired, requirePerm('tasks.edit'), async (req,
     assigneeIds,
     teamIds,
     reminderAt,
+    reminders: remindersInput,
   } = req.body || {};
 
   let statusChanged = false;
   let assigneesChanged = false;
   let reminderChanged = false;
-  let newReminderAt = existing.reminderAt;
+  let newReminderSummary = '';
 
   updateDb((db) => {
     const task = db.tasks.find((t) => t.id === taskId);
@@ -866,12 +953,25 @@ app.patch('/api/tasks/:id', authRequired, requirePerm('tasks.edit'), async (req,
         statusChanged = true;
       }
     }
-    if (reminderAt !== undefined) {
-      if (task.reminderAt !== reminderAt) {
-        task.reminderAt = reminderAt;
-        task.reminderNotified = false;
+    if (remindersInput !== undefined || reminderAt !== undefined) {
+      ensureTaskReminders(task);
+      const nextAts = Array.isArray(remindersInput)
+        ? remindersInput
+        : reminderAt
+          ? [reminderAt]
+          : [];
+      const next = buildRemindersFromAts(nextAts, task.reminders);
+      const prevKey = JSON.stringify(
+        (task.reminders || []).map((r) => r.at).sort()
+      );
+      const nextKey = JSON.stringify(next.map((r) => r.at).sort());
+      if (prevKey !== nextKey) {
+        task.reminders = next;
+        syncLegacyReminderFields(task);
         reminderChanged = true;
-        newReminderAt = reminderAt;
+        newReminderSummary = next
+          .map((r) => new Date(r.at).toLocaleString())
+          .join(', ');
       }
     }
     if (Array.isArray(assigneeIds)) {
@@ -921,19 +1021,22 @@ app.patch('/api/tasks/:id', authRequired, requirePerm('tasks.edit'), async (req,
       emailVars: { taskTitle: task.title },
     });
   }
-  if (reminderChanged && newReminderAt) {
+  if (reminderChanged && newReminderSummary) {
     await notifyTaskUsers(taskId, {
       type: 'reminder_set',
-      title: 'Reminder scheduled',
-      body: `Reminder for "${task.title}" set for ${new Date(newReminderAt).toLocaleString()}`,
-      excludeUserId: null,
+      title: 'Reminders updated',
+      body: `Reminders for "${task.title}": ${newReminderSummary}`,
+      excludeUserId: req.user.id,
       actorUserId: req.user.id,
       emailVars: {
         taskTitle: task.title,
-        reminderAt: new Date(newReminderAt).toLocaleString(),
+        reminderAt: newReminderSummary,
       },
     });
-    if (new Date(newReminderAt).getTime() <= Date.now()) {
+    const anyDue = (task.reminders || []).some(
+      (r) => !r.notified && new Date(r.at).getTime() <= Date.now()
+    );
+    if (anyDue) {
       await processDueReminders();
     }
   }

@@ -20,7 +20,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
   const [task, setTask] = useState<any>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [newCheck, setNewCheck] = useState('');
-  const [reminderLocal, setReminderLocal] = useState('');
+  const [remindersLocal, setRemindersLocal] = useState<string[]>(['']);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -28,12 +28,23 @@ export default function TaskDetailScreen({ route, navigation }: any) {
       setRefreshing(true);
       const data = await api.task(id);
       setTask(data.task);
-      if (data.task.reminderAt) {
+      const fromList = (data.task.reminders || [])
+        .map((r: any) => {
+          const d = new Date(r.at);
+          if (Number.isNaN(d.getTime())) return '';
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        })
+        .filter(Boolean);
+      if (fromList.length) setRemindersLocal(fromList);
+      else if (data.task.reminderAt) {
         const d = new Date(data.task.reminderAt);
         const pad = (n: number) => String(n).padStart(2, '0');
-        setReminderLocal(
-          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-        );
+        setRemindersLocal([
+          `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`,
+        ]);
+      } else {
+        setRemindersLocal(['']);
       }
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -125,18 +136,21 @@ export default function TaskDetailScreen({ route, navigation }: any) {
 
   async function saveReminder() {
     try {
-      let reminderAt: string | null = null;
-      if (reminderLocal.trim()) {
-        const normalized = reminderLocal.trim().replace(' ', 'T');
+      const reminders: string[] = [];
+      for (const raw of remindersLocal) {
+        if (!raw.trim()) continue;
+        const normalized = raw.trim().replace(' ', 'T');
         const d = new Date(normalized);
-        if (Number.isNaN(d.getTime())) throw new Error('Invalid reminder datetime');
-        reminderAt = d.toISOString();
+        if (Number.isNaN(d.getTime())) throw new Error(`Invalid reminder: ${raw}`);
+        reminders.push(d.toISOString());
       }
-      const data = await api.updateTask(id, { reminderAt });
+      const data = await api.updateTask(id, { reminders });
       setTask(data.task);
       Alert.alert(
-        'Reminder saved',
-        'An alert was added for all assigned users. When due, another alert is created automatically (check Alerts).'
+        'Reminders saved',
+        reminders.length
+          ? `${reminders.length} reminder(s) saved. Assignees are alerted when each one is due.`
+          : 'All reminders cleared.'
       );
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -208,17 +222,37 @@ export default function TaskDetailScreen({ route, navigation }: any) {
         Teams: {(task.teams || []).map((t: any) => t.name).join(', ') || '—'}
       </Text>
 
-      <Text style={styles.label}>Reminder</Text>
-      <TextInput
-        style={styles.input}
-        value={reminderLocal}
-        onChangeText={setReminderLocal}
-        placeholder="YYYY-MM-DDTHH:mm"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-      />
+      <Text style={styles.label}>Reminders</Text>
+      {remindersLocal.map((value, index) => (
+        <View key={index} style={styles.row}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginTop: 0 }]}
+            value={value}
+            onChangeText={(text) =>
+              setRemindersLocal((list) => list.map((v, i) => (i === index ? text : v)))
+            }
+            placeholder="YYYY-MM-DDTHH:mm"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+          />
+          {remindersLocal.length > 1 ? (
+            <TouchableOpacity
+              style={styles.miniBtn}
+              onPress={() => setRemindersLocal((list) => list.filter((_, i) => i !== index))}
+            >
+              <Text style={styles.miniBtnText}>Remove</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ))}
+      <TouchableOpacity
+        style={[styles.secondaryBtn, { marginTop: 8 }]}
+        onPress={() => setRemindersLocal((list) => [...list, ''])}
+      >
+        <Text style={styles.secondaryBtnText}>+ Add another reminder</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.secondaryBtn} onPress={saveReminder}>
-        <Text style={styles.secondaryBtnText}>Set reminder & notify</Text>
+        <Text style={styles.secondaryBtnText}>Save reminders & notify</Text>
       </TouchableOpacity>
 
       <Text style={styles.label}>Checklist</Text>

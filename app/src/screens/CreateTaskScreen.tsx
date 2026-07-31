@@ -59,7 +59,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [checklistText, setChecklistText] = useState('');
   const [checklist, setChecklist] = useState<string[]>([]);
-  const [reminderLocal, setReminderLocal] = useState('');
+  const [remindersLocal, setRemindersLocal] = useState<string[]>(['']);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [msgError, setMsgError] = useState(false);
@@ -80,7 +80,12 @@ export default function CreateTaskScreen({ navigation, route }: any) {
           setStatus(task.status || 'pending');
           setAssigneeIds((task.assignees || []).map((a: any) => a.id));
           setTeamIds((task.teams || []).map((tm: any) => tm.id));
-          setReminderLocal(formatReminderLocal(task.reminderAt));
+          const fromList = (task.reminders || [])
+            .map((r: any) => formatReminderLocal(r.at))
+            .filter(Boolean);
+          if (fromList.length) setRemindersLocal(fromList);
+          else if (task.reminderAt) setRemindersLocal([formatReminderLocal(task.reminderAt)]);
+          else setRemindersLocal(['']);
         }
       } catch (e: any) {
         setMsgError(true);
@@ -108,10 +113,10 @@ export default function CreateTaskScreen({ navigation, route }: any) {
     try {
       setBusy(true);
       showMsg(editing ? 'Updating task…' : 'Saving task…', false);
-      let reminderAt: string | null = null;
-      if (reminderLocal.trim()) {
-        const d = parseReminderLocal(reminderLocal);
-        reminderAt = d.toISOString();
+      const reminders: string[] = [];
+      for (const raw of remindersLocal) {
+        if (!raw.trim()) continue;
+        reminders.push(parseReminderLocal(raw).toISOString());
       }
 
       if (editing && taskId) {
@@ -121,7 +126,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
           status,
           assigneeIds,
           teamIds,
-          reminderAt,
+          reminders,
         });
         showMsg('Task updated.', false);
       } else {
@@ -132,7 +137,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
           assigneeIds,
           teamIds,
           checklist,
-          reminderAt,
+          reminders,
         });
         showMsg('Task saved. Returning to list…', false);
       }
@@ -268,18 +273,38 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         </>
       )}
 
-      <Text style={styles.label}>Reminder (local time on this device)</Text>
-      <TextInput
-        style={styles.input}
-        value={reminderLocal}
-        onChangeText={setReminderLocal}
-        placeholder="YYYY-MM-DDTHH:mm  e.g. 2026-07-30T07:40"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-      />
+      <Text style={styles.label}>Reminders (local time on this device)</Text>
+      {remindersLocal.map((value, index) => (
+        <View key={index} style={styles.row}>
+          <TextInput
+            style={[styles.input, { flex: 1 }]}
+            value={value}
+            onChangeText={(text) =>
+              setRemindersLocal((list) => list.map((v, i) => (i === index ? text : v)))
+            }
+            placeholder="YYYY-MM-DDTHH:mm  e.g. 2026-07-30T07:40"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+          />
+          {remindersLocal.length > 1 ? (
+            <TouchableOpacity
+              style={styles.addBtn}
+              onPress={() => setRemindersLocal((list) => list.filter((_, i) => i !== index))}
+            >
+              <Text style={[styles.addBtnText, { color: colors.danger }]}>Remove</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ))}
+      <TouchableOpacity
+        style={[styles.addBtn, { alignSelf: 'flex-start', marginTop: 8 }]}
+        onPress={() => setRemindersLocal((list) => [...list, ''])}
+      >
+        <Text style={styles.addBtnText}>+ Add another reminder</Text>
+      </TouchableOpacity>
       <Text style={styles.hint}>
         Use two-digit hour if needed (07:40). Assignees are notified when the task is created
-        {editing ? ' or updated' : ''} and when a reminder is due.
+        {editing ? ' or updated' : ''} and when each reminder is due.
         {Platform.OS === 'web' ? ' Desktop also shows a system notification when allowed.' : ''}
       </Text>
 
