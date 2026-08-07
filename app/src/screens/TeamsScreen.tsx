@@ -17,6 +17,7 @@ import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
+import InfoBanner from '../components/InfoBanner';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TeamsScreen({ navigation }: any) {
@@ -140,138 +141,147 @@ export default function TeamsScreen({ navigation }: any) {
       {showInitialLoad ? (
         <LoadingView label="Loading teams…" />
       ) : (
-        <FlatList
-          data={teams}
-          keyExtractor={(item) => item.id}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
-          }
-          contentContainerStyle={styles.grid}
-          ListHeaderComponent={
-            <View style={styles.listHeader}>
-              <Text style={styles.sub}>
-                Non-admins only see teams they belong to. Admins (or roles with “view all teams”) see
-                every team.
-              </Text>
-              {!!msg && <Text style={styles.msg}>{msg}</Text>}
-              {can('teams.create') && !showForm ? (
-                <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>
-                  <View style={styles.btnInner}>
-                    <Ionicons name="people-outline" size={16} color={colors.onAccent} />
-                    <Text style={styles.btnText}>Create team</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : null}
-              {showForm ? (
-                <View style={styles.form}>
-                  <Text style={styles.formTitle}>{editingId ? 'Edit team' : 'New team'}</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Team name"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                  <Text style={styles.label}>Select users for this team</Text>
-                  {Platform.OS === 'web' ? (
-                    <select
-                      value={pickerValue}
-                      onChange={(e: any) => {
-                        const id = e.target.value;
-                        setPickerValue(id);
-                        if (id) addFromPicker(id);
-                      }}
-                      style={{
-                        width: '100%',
-                        marginBottom: 10,
-                        padding: 10,
-                        borderRadius: 10,
-                        backgroundColor: colors.bgElevated,
-                        color: colors.text,
-                        border: `1px solid ${colors.border}`,
-                      }}
-                    >
-                      <option value="">Choose a user…</option>
-                      {availableUsers.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {(u.firstName || u.name) + ' ' + (u.lastName || '')} ({u.email})
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <View style={styles.chips}>
-                      {availableUsers.map((u) => (
-                        <TouchableOpacity
-                          key={u.id}
-                          style={styles.chip}
-                          onPress={() => addFromPicker(u.id)}
-                        >
-                          <Text style={styles.chipText}>
-                            + {u.firstName || u.name} {u.lastName || ''}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                  <Text style={styles.label}>Selected members</Text>
-                  <View style={styles.chips}>
-                    {memberIds.map((id) => {
-                      const u = users.find((x) => x.id === id);
-                      return (
-                        <TouchableOpacity
-                          key={id}
-                          style={[styles.chip, styles.chipOn]}
-                          onPress={() => setMemberIds((ids) => ids.filter((x) => x !== id))}
-                        >
-                          <Text style={[styles.chipText, styles.chipTextOn]}>
-                            {u ? `${u.firstName || u.name} ${u.lastName || ''}`.trim() : id} ×
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  <TouchableOpacity style={styles.btn} onPress={create}>
-                    <Text style={styles.btnText}>{editingId ? 'Save team' : 'Create team'}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.secondary} onPress={resetForm}>
-                    <Text style={styles.secondaryText}>Cancel</Text>
-                  </TouchableOpacity>
+        <View style={styles.root}>
+          <View style={styles.toolbar}>
+            <InfoBanner>
+              Non-admins only see teams they belong to. Admins (or roles with “view all teams”) see
+              every team.
+            </InfoBanner>
+            {!!msg && <Text style={styles.msg}>{msg}</Text>}
+            {can('teams.create') && !showForm ? (
+              <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>
+                <View style={styles.btnInner}>
+                  <Ionicons name="people-outline" size={16} color={colors.onAccent} />
+                  <Text style={styles.btnText}>Create team</Text>
                 </View>
-              ) : null}
-            </View>
-          }
-          ListEmptyComponent={
-            <Text style={styles.empty}>No teams visible for your account.</Text>
-          }
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{item.name}</Text>
-              <Text style={styles.meta}>
-                Members:{'\n'}
-                {(item.members || [])
-                  .map((m: any) => `${m.firstName || m.name} ${m.lastName || ''} <${m.email}>`)
-                  .join('\n') || '—'}
-              </Text>
-              <View style={styles.actions}>
-                {can('teams.edit') ? (
-                  <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
-                    <Ionicons name="create-outline" size={14} color="#fff" />
-                    <Text style={styles.miniText}>Edit</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {can('teams.delete') ? (
-                  <TouchableOpacity
-                    style={[styles.mini, styles.danger]}
-                    onPress={() => removeTeam(item)}
+              </TouchableOpacity>
+            ) : null}
+            {showForm ? (
+              <View style={styles.form}>
+                <Text style={styles.formTitle}>{editingId ? 'Edit team' : 'New team'}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="Team name"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <Text style={styles.label}>Select users for this team</Text>
+                {Platform.OS === 'web' ? (
+                  <select
+                    value={pickerValue}
+                    onChange={(e: any) => {
+                      const id = e.target.value;
+                      setPickerValue(id);
+                      if (id) addFromPicker(id);
+                    }}
+                    style={{
+                      width: '100%',
+                      marginBottom: 10,
+                      padding: 10,
+                      borderRadius: 10,
+                      backgroundColor: colors.bgElevated,
+                      color: colors.text,
+                      border: `1px solid ${colors.border}`,
+                    }}
                   >
-                    <Ionicons name="trash-outline" size={14} color="#fff" />
-                    <Text style={styles.miniText}>Delete</Text>
-                  </TouchableOpacity>
-                ) : null}
+                    <option value="">Choose a user…</option>
+                    {availableUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {(u.firstName || u.name) + ' ' + (u.lastName || '')} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <View style={styles.chips}>
+                    {availableUsers.map((u) => (
+                      <TouchableOpacity
+                        key={u.id}
+                        style={styles.chip}
+                        onPress={() => addFromPicker(u.id)}
+                      >
+                        <Text style={styles.chipText}>
+                          + {u.firstName || u.name} {u.lastName || ''}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+                <Text style={styles.label}>Selected members</Text>
+                <View style={styles.chips}>
+                  {memberIds.map((id) => {
+                    const u = users.find((x) => x.id === id);
+                    return (
+                      <TouchableOpacity
+                        key={id}
+                        style={[styles.chip, styles.chipOn]}
+                        onPress={() => setMemberIds((ids) => ids.filter((x) => x !== id))}
+                      >
+                        <Text style={[styles.chipText, styles.chipTextOn]}>
+                          {u ? `${u.firstName || u.name} ${u.lastName || ''}`.trim() : id} ×
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity style={styles.btn} onPress={create}>
+                  <Text style={styles.btnText}>{editingId ? 'Save team' : 'Create team'}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondary} onPress={resetForm}>
+                  <Text style={styles.secondaryText}>Cancel</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-          )}
-        />
+            ) : null}
+          </View>
+          <FlatList
+            data={teams}
+            keyExtractor={(item) => item.id}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
+            }
+            contentContainerStyle={styles.grid}
+            ListEmptyComponent={
+              <Text style={styles.empty}>No teams visible for your account.</Text>
+            }
+            renderItem={({ item }) => (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.metaLabel}>Members</Text>
+                {(item.members || []).length === 0 ? (
+                  <Text style={styles.meta}>—</Text>
+                ) : (
+                  (item.members || []).map((m: any) => (
+                    <View key={m.id || m.email} style={styles.memberRow}>
+                      <Text style={styles.memberName} numberOfLines={1}>
+                        {`${m.firstName || m.name || ''} ${m.lastName || ''}`.trim() || 'User'}
+                      </Text>
+                      <Text style={styles.memberEmail} numberOfLines={1}>
+                        {m.email}
+                      </Text>
+                    </View>
+                  ))
+                )}
+                <View style={styles.actions}>
+                  {can('teams.edit') ? (
+                    <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
+                      <Ionicons name="create-outline" size={14} color={colors.accent} />
+                      <Text style={styles.miniText}>Edit</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {can('teams.delete') ? (
+                    <TouchableOpacity
+                      style={[styles.mini, styles.danger]}
+                      onPress={() => removeTeam(item)}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#fff" />
+                      <Text style={styles.dangerText}>Delete</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+            )}
+          />
+        </View>
       )}
       {dialog}
     </AppShell>
@@ -280,20 +290,21 @@ export default function TeamsScreen({ navigation }: any) {
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    root: { flex: 1 },
+    toolbar: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 4,
+    },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.cardGap,
-      padding: 16,
+      paddingHorizontal: 16,
       paddingBottom: 40,
+      paddingTop: 8,
       alignItems: 'flex-start',
     },
-    listHeader: {
-      width: '100%',
-      flexBasis: '100%',
-      marginBottom: 4,
-    },
-    sub: { color: colors.textMuted, marginBottom: 12, lineHeight: 20 },
     msg: {
       color: colors.accent,
       backgroundColor: colors.bgCard,
@@ -343,21 +354,23 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.accent,
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
       marginBottom: 8,
       minHeight: 38,
       justifyContent: 'center',
-      maxWidth: spacing.cardWidth,
+      alignSelf: 'flex-start',
     },
     btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
     btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     secondary: {
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
-      maxWidth: spacing.cardWidth,
+      alignSelf: 'flex-start',
     },
     secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     card: {
@@ -370,8 +383,18 @@ function makeStyles(colors: ThemeColors) {
       maxWidth: '100%',
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
-    meta: { color: colors.textMuted, marginTop: 4, fontSize: 12, lineHeight: 18 },
-    actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    metaLabel: {
+      color: colors.textMuted,
+      marginTop: 8,
+      marginBottom: 4,
+      fontSize: 12,
+      fontWeight: '700',
+    },
+    meta: { color: colors.textMuted, fontSize: 12 },
+    memberRow: { marginBottom: 6 },
+    memberName: { color: colors.text, fontSize: 13, fontWeight: '600' },
+    memberEmail: { color: colors.textMuted, fontSize: 11, marginTop: 1 },
+    actions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
     mini: {
       backgroundColor: colors.accentDim,
       borderRadius: 8,
@@ -382,7 +405,8 @@ function makeStyles(colors: ThemeColors) {
       gap: 4,
     },
     danger: { backgroundColor: colors.danger },
-    miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    miniText: { color: colors.accent, fontWeight: '700', fontSize: 12 },
+    dangerText: { color: '#fff', fontWeight: '700', fontSize: 12 },
     empty: { color: colors.textMuted, textAlign: 'center', marginTop: 24, width: '100%' },
   });
 }

@@ -167,125 +167,127 @@ export default function UsersScreen({ navigation }: any) {
       {showInitialLoad ? (
         <LoadingView label="Loading users…" />
       ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(item) => item.id}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
-          }
-          contentContainerStyle={styles.grid}
-          ListHeaderComponent={
-            <View style={styles.listHeader}>
-              {!!msg && <Text style={styles.msg}>{msg}</Text>}
-              {can('users.create') && !showForm ? (
-                <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>
-                  <View style={styles.btnInner}>
-                    <Ionicons name="person-add-outline" size={16} color={colors.onAccent} />
-                    <Text style={styles.btnText}>Create user</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : null}
-              {showForm ? (
-                <View style={styles.form}>
-                  <Text style={styles.formTitle}>{editingId ? 'Edit user' : 'New user'}</Text>
-                  <FormField
-                    label="First name"
-                    required
-                    error={fieldErrors.firstName}
-                    value={firstName}
-                    onChangeText={setFirstName}
-                    placeholder="First name"
-                  />
-                  <FormField
-                    label="Last name"
-                    required
-                    error={fieldErrors.lastName}
-                    value={lastName}
-                    onChangeText={setLastName}
-                    placeholder="Last name"
-                  />
-                  <FormField
-                    label="Email"
-                    required
-                    error={fieldErrors.email}
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="Email"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
-                  <FormField
-                    label="Password"
-                    required={!editingId}
-                    error={fieldErrors.password}
-                    hint={editingId ? 'Leave blank to keep current password' : undefined}
-                  >
-                    <PasswordField
-                      value={password}
-                      onChangeText={setPassword}
-                      placeholder={editingId ? 'New password (optional)' : 'Password'}
-                      error={Boolean(fieldErrors.password)}
-                    />
-                  </FormField>
-                  <Text style={styles.label}>Role</Text>
-                  <View style={styles.chips}>
-                    {roles.map((r) => {
-                      const on = roleId === r.id;
-                      return (
-                        <TouchableOpacity
-                          key={r.id}
-                          style={[styles.chip, on && styles.chipOn]}
-                          onPress={() => setRoleId(r.id)}
-                        >
-                          <Text style={[styles.chipText, on && styles.chipTextOn]}>{r.name}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                  <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
-                    {busy ? (
-                      <ActivityIndicator color={colors.onAccent} />
-                    ) : (
-                      <Text style={styles.btnText}>
-                        {editingId ? 'Save changes' : 'Create user'}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.secondary} onPress={resetForm}>
-                    <Text style={styles.secondaryText}>Cancel</Text>
-                  </TouchableOpacity>
+        <View style={styles.root}>
+          <View style={styles.toolbar}>
+            {!!msg && <Text style={styles.msg}>{msg}</Text>}
+            {can('users.create') && !showForm ? (
+              <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>
+                <View style={styles.btnInner}>
+                  <Ionicons name="person-add-outline" size={16} color={colors.onAccent} />
+                  <Text style={styles.btnText}>Create user</Text>
                 </View>
-              ) : null}
-            </View>
-          }
-          ListEmptyComponent={<Text style={styles.empty}>No users yet.</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>
-                {item.firstName || item.name} {item.lastName || ''}
-              </Text>
-              <Text style={styles.meta}>{item.email}</Text>
-              <Text style={styles.meta}>Role: {item.roleName || item.role}</Text>
-              <View style={styles.actions}>
-                {can('users.edit') ? (
-                  <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
-                    <Ionicons name="create-outline" size={14} color="#fff" />
-                    <Text style={styles.miniText}>Edit</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {can('users.delete') ? (
-                  <TouchableOpacity
-                    style={[styles.mini, styles.danger]}
-                    onPress={() => removeUser(item)}
-                  >
-                    <Ionicons name="trash-outline" size={14} color="#fff" />
-                    <Text style={styles.miniText}>Delete</Text>
-                  </TouchableOpacity>
-                ) : null}
+              </TouchableOpacity>
+            ) : null}
+            {showForm ? (
+              <View style={styles.form}>
+                <Text style={styles.formTitle}>{editingId ? 'Edit user' : 'New user'}</Text>
+                <FormField
+                  label="First name"
+                  required
+                  error={fieldErrors.firstName}
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  placeholder="First name"
+                />
+                <FormField
+                  label="Last name"
+                  required
+                  error={fieldErrors.lastName}
+                  value={lastName}
+                  onChangeText={setLastName}
+                  placeholder="Last name"
+                />
+                <FormField
+                  label="Email"
+                  required
+                  error={fieldErrors.email}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Email"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+                <FormField
+                  label="Password"
+                  required={!editingId}
+                  error={fieldErrors.password}
+                  hint={editingId ? 'Leave blank to keep current password' : undefined}
+                >
+                  <PasswordField
+                    value={password}
+                    onChangeText={setPassword}
+                    placeholder={editingId ? 'New password (optional)' : 'Password'}
+                    error={Boolean(fieldErrors.password)}
+                  />
+                </FormField>
+                <Text style={styles.label}>Role</Text>
+                <View style={styles.chips}>
+                  {roles.map((r) => {
+                    const on = roleId === r.id;
+                    return (
+                      <TouchableOpacity
+                        key={r.id}
+                        style={[styles.chip, on && styles.chipOn]}
+                        onPress={() => setRoleId(r.id)}
+                      >
+                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{r.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
+                  {busy ? (
+                    <ActivityIndicator color={colors.onAccent} />
+                  ) : (
+                    <Text style={styles.btnText}>
+                      {editingId ? 'Save changes' : 'Create user'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondary} onPress={resetForm}>
+                  <Text style={styles.secondaryText}>Cancel</Text>
+                </TouchableOpacity>
               </View>
-            </View>
-          )}
-        />
+            ) : null}
+          </View>
+          <FlatList
+            data={users}
+            keyExtractor={(item) => item.id}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
+            }
+            contentContainerStyle={styles.grid}
+            ListEmptyComponent={<Text style={styles.empty}>No users yet.</Text>}
+            renderItem={({ item }) => (
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>
+                  {item.firstName || item.name} {item.lastName || ''}
+                </Text>
+                <Text style={styles.meta} numberOfLines={1}>
+                  {item.email}
+                </Text>
+                <Text style={styles.meta}>Role: {item.roleName || item.role}</Text>
+                <View style={styles.actions}>
+                  {can('users.edit') ? (
+                    <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
+                      <Ionicons name="create-outline" size={14} color={colors.accent} />
+                      <Text style={styles.miniText}>Edit</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {can('users.delete') ? (
+                    <TouchableOpacity
+                      style={[styles.mini, styles.danger]}
+                      onPress={() => removeUser(item)}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#fff" />
+                      <Text style={styles.dangerText}>Delete</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+              </View>
+            )}
+          />
+        </View>
       )}
       {dialog}
     </AppShell>
@@ -294,18 +296,20 @@ export default function UsersScreen({ navigation }: any) {
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    root: { flex: 1 },
+    toolbar: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 4,
+    },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.cardGap,
-      padding: 16,
+      paddingHorizontal: 16,
       paddingBottom: 40,
+      paddingTop: 8,
       alignItems: 'flex-start',
-    },
-    listHeader: {
-      width: '100%',
-      flexBasis: '100%',
-      marginBottom: 4,
     },
     msg: {
       color: colors.accent,
@@ -320,11 +324,12 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.accent,
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
       marginBottom: 8,
       minHeight: 38,
       justifyContent: 'center',
-      maxWidth: spacing.cardWidth,
+      alignSelf: 'flex-start',
     },
     btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
     btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -334,7 +339,8 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
-      maxWidth: spacing.cardWidth,
+      alignSelf: 'flex-start',
+      paddingHorizontal: spacing.btnPadH,
     },
     secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     form: {
@@ -372,7 +378,7 @@ function makeStyles(colors: ThemeColors) {
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
-    actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    actions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
     mini: {
       backgroundColor: colors.accentDim,
       borderRadius: 8,
@@ -383,7 +389,8 @@ function makeStyles(colors: ThemeColors) {
       gap: 4,
     },
     danger: { backgroundColor: colors.danger },
-    miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    miniText: { color: colors.accent, fontWeight: '700', fontSize: 12 },
+    dangerText: { color: '#fff', fontWeight: '700', fontSize: 12 },
     empty: { color: colors.textMuted, textAlign: 'center', marginTop: 24, width: '100%' },
   });
 }

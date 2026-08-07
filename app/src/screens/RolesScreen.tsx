@@ -301,7 +301,7 @@ export default function RolesScreen({ navigation }: any) {
                 <View style={styles.actions}>
                   {can('roles.edit') ? (
                     <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
-                      <Ionicons name="create-outline" size={14} color="#fff" />
+                      <Ionicons name="create-outline" size={14} color={colors.accent} />
                       <Text style={styles.miniText}>Edit</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -311,7 +311,7 @@ export default function RolesScreen({ navigation }: any) {
                       onPress={() => removeRole(item)}
                     >
                       <Ionicons name="trash-outline" size={14} color="#fff" />
-                      <Text style={styles.miniText}>Delete</Text>
+                      <Text style={styles.dangerText}>Delete</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
@@ -340,19 +340,23 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.accent,
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
       marginBottom: 8,
       minHeight: 38,
       justifyContent: 'center',
+      alignSelf: 'flex-start',
     },
     btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
     btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     secondary: {
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
+      alignSelf: 'flex-start',
     },
     secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     form: {
@@ -410,7 +414,7 @@ function makeStyles(colors: ThemeColors) {
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
-    actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    actions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
     mini: {
       backgroundColor: colors.accentDim,
       borderRadius: 8,
@@ -421,6 +425,7 @@ function makeStyles(colors: ThemeColors) {
       gap: 4,
     },
     danger: { backgroundColor: colors.danger },
-    miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+    miniText: { color: colors.accent, fontWeight: '700', fontSize: 12 },
+    dangerText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   });
 }

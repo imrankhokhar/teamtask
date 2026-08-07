@@ -13,7 +13,9 @@ import { api } from '../api';
 import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
+import InfoBanner from '../components/InfoBanner';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { formatDateTime } from '../format';
 
 export default function NotificationsScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -52,7 +54,7 @@ export default function NotificationsScreen({ navigation }: any) {
     <AppShell navigation={navigation} active="Notifications" title="Notifications">
       <View style={styles.root}>
         <View style={styles.header}>
-          <Text style={styles.sub}>Only tasks you are assigned to (or report) appear here.</Text>
+          <InfoBanner>Only tasks you are assigned to (or report) appear here.</InfoBanner>
           <TouchableOpacity style={styles.markAll} onPress={markAll}>
             <Ionicons name="checkmark-done-outline" size={16} color={colors.accent} />
             <Text style={styles.link}>Mark all read</Text>
@@ -79,7 +81,7 @@ export default function NotificationsScreen({ navigation }: any) {
               >
                 <Text style={styles.cardTitle}>{item.title || item.type}</Text>
                 <Text style={styles.meta}>{item.body || item.message}</Text>
-                <Text style={styles.time}>{item.createdAt}</Text>
+                <Text style={styles.time}>{formatDateTime(item.createdAt)}</Text>
               </TouchableOpacity>
             )}
           />
@@ -94,14 +96,16 @@ function makeStyles(colors: ThemeColors) {
     root: { flex: 1 },
     header: {
       paddingHorizontal: 16,
-      paddingTop: 8,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      gap: 12,
+      paddingTop: 12,
+      gap: 8,
     },
-    sub: { color: colors.textMuted, flex: 1, lineHeight: 18 },
-    markAll: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    markAll: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      alignSelf: 'flex-end',
+      marginBottom: 4,
+    },
     link: { color: colors.accent, fontWeight: '700' },
     grid: {
       flexDirection: 'row',

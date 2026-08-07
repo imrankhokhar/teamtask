@@ -15,6 +15,7 @@ import FormField from '../components/FormField';
 import LoadingView from '../components/LoadingView';
 import ReminderPickerModal from '../components/ReminderPickerModal';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { formatReminderLabel } from '../format';
 
 /** Accepts 2026-07-30T7:40 or 2026-07-30T07:40 — browsers reject single-digit hours. */
 function parseReminderLocal(raw: string): Date {
@@ -302,7 +303,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
           >
             <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
             <Text style={value ? styles.reminderValue : styles.reminderPlaceholder}>
-              {value || 'Tap to pick date & time'}
+              {value ? formatReminderLabel(value) : 'Tap to pick date & time'}
             </Text>
           </TouchableOpacity>
           {remindersLocal.length > 1 ? (

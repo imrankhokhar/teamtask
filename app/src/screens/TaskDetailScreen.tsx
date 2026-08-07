@@ -17,6 +17,7 @@ import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
 import ReminderPickerModal from '../components/ReminderPickerModal';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { formatReminderLabel } from '../format';
 
 export default function TaskDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
@@ -207,7 +208,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
               style={styles.editBtn}
               onPress={() => navigation.navigate('CreateTask', { taskId: id })}
             >
-              <Ionicons name="create-outline" size={14} color={colors.onAccent} />
+              <Ionicons name="create-outline" size={14} color={colors.accent} />
               <Text style={styles.editBtnText}>Edit</Text>
             </TouchableOpacity>
           ) : null}
@@ -256,7 +257,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
             >
               <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
               <Text style={value ? styles.reminderValue : styles.reminderPlaceholder}>
-                {value || 'Tap to pick date & time'}
+                {value ? formatReminderLabel(value) : 'Tap to pick date & time'}
               </Text>
             </TouchableOpacity>
             {remindersLocal.length > 1 ? (
@@ -382,7 +383,7 @@ function makeStyles(colors: ThemeColors) {
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     title: { color: colors.text, fontSize: 26, fontWeight: '800' },
     editBtn: {
-      backgroundColor: colors.bgCard,
+      backgroundColor: colors.accentDim,
       borderRadius: spacing.btnRadius,
       paddingHorizontal: spacing.btnPadH,
       paddingVertical: spacing.btnPadV,
@@ -435,6 +436,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.bgCard,
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
@@ -442,6 +444,7 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'center',
       flexDirection: 'row',
       gap: 6,
+      alignSelf: 'flex-start',
     },
     secondaryBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     checkCard: {
