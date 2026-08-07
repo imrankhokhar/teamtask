@@ -111,6 +111,38 @@ export const api = {
     request('/api/auth/reset-password', { method: 'POST', body, token: null }),
   changePassword: (body: { currentPassword: string; newPassword: string }) =>
     request('/api/me/password', { method: 'POST', body }),
+  updateProfile: (body: {
+    firstName?: string;
+    lastName?: string;
+    name?: string;
+    email?: string;
+    currentPassword?: string;
+    newPassword?: string;
+  }) => request('/api/me', { method: 'PATCH', body }),
+  uploadAvatar: async (uri: string, name: string, mimeType?: string, fileObj?: any) => {
+    const form = new FormData();
+    if (Platform.OS === 'web') {
+      let blob: Blob;
+      if (fileObj instanceof Blob) blob = fileObj;
+      else {
+        const res = await fetch(uri);
+        blob = await res.blob();
+      }
+      const filename = name || 'avatar.jpg';
+      try {
+        form.append('avatar', new File([blob], filename, { type: mimeType || blob.type || 'image/jpeg' }));
+      } catch {
+        form.append('avatar', blob, filename);
+      }
+    } else {
+      form.append('avatar', {
+        uri,
+        name: name || 'avatar.jpg',
+        type: mimeType || 'image/jpeg',
+      } as any);
+    }
+    return request('/api/me/avatar', { method: 'POST', formData: form });
+  },
   me: () => request('/api/me'),
   setPushToken: (pushToken: string | null) =>
     request('/api/me/push-token', { method: 'POST', body: { pushToken } }),

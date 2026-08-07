@@ -11,7 +11,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
@@ -299,26 +299,26 @@ function makeStyles(colors: ThemeColors) {
     },
     btn: {
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       marginBottom: 8,
-      minHeight: 46,
+      minHeight: 38,
       justifyContent: 'center',
     },
-    btnText: { color: colors.onAccent, fontWeight: '800' },
+    btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
     secondary: {
-      borderRadius: 12,
-      paddingVertical: 10,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
     },
-    secondaryText: { color: colors.accent, fontWeight: '700' },
+    secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     form: {
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 8,
@@ -339,13 +339,13 @@ function makeStyles(colors: ThemeColors) {
     chipTextOn: { color: colors.onAccent, fontWeight: '700' },
     card: {
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
-    meta: { color: colors.textMuted, marginTop: 4 },
+    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
+    meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
     actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
     mini: {
       backgroundColor: colors.accentDim,

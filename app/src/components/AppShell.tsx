@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,13 @@ import {
   ScrollView,
   useWindowDimensions,
   Platform,
+  Image,
+  Pressable,
+  Modal,
 } from 'react-native';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
+import { getApiBaseUrlSyncFallback } from '../api';
 
 type NavItem = {
   key: string;
@@ -25,6 +29,19 @@ const MENU: NavItem[] = [
   { key: 'Notifications', label: 'Notifications', perm: 'notifications.view' },
   { key: 'Settings', label: 'Settings', perm: 'settings.view' },
 ];
+
+function avatarUrl(path?: string | null) {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return `${getApiBaseUrlSyncFallback()}${path}`;
+}
+
+function initials(name?: string) {
+  const parts = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+}
 
 export default function AppShell({
   navigation,
@@ -43,16 +60,25 @@ export default function AppShell({
   const { width } = useWindowDimensions();
   const sidebarWide = width >= 900 || Platform.OS === 'web';
   const items = MENU.filter((m) => !m.perm || can(m.perm));
+  const [menuOpen, setMenuOpen] = useState(false);
+  const photo = avatarUrl(user?.avatarUrl);
+
+  function go(screen: string) {
+    setMenuOpen(false);
+    navigation.navigate(screen);
+  }
 
   const sidebar = (
     <View style={[styles.sidebar, !sidebarWide && styles.sidebarCompact]}>
       <Text style={styles.brand}>TeamTask</Text>
-      <Text style={styles.userLine} numberOfLines={2}>
-        {user?.name}
-        {'\n'}
-        <Text style={styles.roleLine}>{user?.roleName || user?.role}</Text>
-      </Text>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 4, paddingVertical: 8 }}>
+      <ScrollView
+        style={{ flex: sidebarWide ? 1 : undefined }}
+        horizontal={!sidebarWide}
+        contentContainerStyle={
+          sidebarWide ? { gap: 2, paddingVertical: 8 } : { gap: 6, paddingVertical: 4, flexDirection: 'row' }
+        }
+        showsHorizontalScrollIndicator={false}
+      >
         {items.map((item) => {
           const on = active === item.key;
           return (
@@ -66,9 +92,11 @@ export default function AppShell({
           );
         })}
       </ScrollView>
-      <TouchableOpacity onPress={logout} style={styles.logout}>
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+      {sidebarWide ? (
+        <TouchableOpacity onPress={logout} style={styles.logout}>
+          <Text style={styles.logoutText}>Logout</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 
@@ -76,13 +104,58 @@ export default function AppShell({
     <View style={[styles.root, sidebarWide ? styles.row : styles.col]}>
       {sidebar}
       <View style={styles.content}>
-        {title ? (
-          <View style={styles.contentHeader}>
-            <Text style={styles.contentTitle}>{title}</Text>
-          </View>
-        ) : null}
+        <View style={styles.contentHeader}>
+          <Text style={styles.contentTitle} numberOfLines={1}>
+            {title || active}
+          </Text>
+          <TouchableOpacity
+            style={styles.userChip}
+            onPress={() => setMenuOpen(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.userName} numberOfLines={1}>
+              {user?.name || 'Account'}
+            </Text>
+            <View style={styles.avatar}>
+              {photo ? (
+                <Image source={{ uri: photo }} style={styles.avatarImg} />
+              ) : (
+                <Text style={styles.avatarText}>{initials(user?.name)}</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.contentBody}>{children}</View>
       </View>
+
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <Pressable style={styles.menuBackdrop} onPress={() => setMenuOpen(false)}>
+          <View style={styles.menuCard}>
+            <Text style={styles.menuEmail} numberOfLines={1}>
+              {user?.email}
+            </Text>
+            <TouchableOpacity style={styles.menuItem} onPress={() => go('Profile')}>
+              <Text style={styles.menuItemText}>Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => go('Settings')}>
+              <Text style={styles.menuItemText}>Settings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => go('Notifications')}>
+              <Text style={styles.menuItemText}>Notifications</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.menuItem, styles.menuDanger]}
+              onPress={() => {
+                setMenuOpen(false);
+                logout();
+              }}
+            >
+              <Text style={styles.menuDangerText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -93,45 +166,116 @@ function makeStyles(colors: ThemeColors) {
     row: { flexDirection: 'row' },
     col: { flexDirection: 'column' },
     sidebar: {
-      width: 232,
+      width: 200,
       backgroundColor: colors.bgElevated,
       borderRightWidth: 1,
       borderRightColor: colors.border,
-      paddingTop: Platform.OS === 'web' ? 20 : 48,
-      paddingHorizontal: 12,
-      paddingBottom: 16,
+      paddingTop: Platform.OS === 'web' ? 16 : 44,
+      paddingHorizontal: 10,
+      paddingBottom: 12,
     },
     sidebarCompact: {
       width: '100%',
       borderRightWidth: 0,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
-      paddingTop: Platform.OS === 'web' ? 12 : 40,
-      maxHeight: 168,
+      paddingTop: Platform.OS === 'web' ? 10 : 36,
+      maxHeight: 96,
     },
-    brand: { color: colors.accent, fontSize: 22, fontWeight: '800', marginBottom: 8, letterSpacing: -0.4 },
-    userLine: { color: colors.text, fontSize: 13, marginBottom: 8, lineHeight: 18 },
-    roleLine: { color: colors.textMuted, fontSize: 12 },
+    brand: {
+      color: colors.accent,
+      fontSize: 18,
+      fontWeight: '800',
+      marginBottom: 6,
+      letterSpacing: -0.3,
+    },
     navItem: {
-      borderRadius: 10,
-      paddingVertical: 10,
-      paddingHorizontal: 12,
+      borderRadius: 8,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
     },
     navItemOn: { backgroundColor: colors.accentDim },
-    navText: { color: colors.textMuted, fontWeight: '600' },
+    navText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
     navTextOn: { color: colors.text, fontWeight: '800' },
-    logout: { paddingVertical: 10, paddingHorizontal: 12 },
-    logoutText: { color: colors.danger, fontWeight: '700' },
+    logout: { paddingVertical: 8, paddingHorizontal: 10 },
+    logoutText: { color: colors.danger, fontWeight: '700', fontSize: 13 },
     content: { flex: 1, minWidth: 0 },
     contentHeader: {
-      paddingHorizontal: 16,
-      paddingTop: 16,
-      paddingBottom: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
       backgroundColor: colors.bg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
     },
-    contentTitle: { color: colors.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+    contentTitle: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+      letterSpacing: -0.2,
+      flex: 1,
+    },
+    userChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      maxWidth: 220,
+    },
+    userName: {
+      color: colors.text,
+      fontWeight: '700',
+      fontSize: 13,
+      maxWidth: 140,
+      textAlign: 'right',
+    },
+    avatar: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      backgroundColor: colors.accentDim,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+    },
+    avatarImg: { width: 34, height: 34 },
+    avatarText: { color: colors.accent, fontWeight: '800', fontSize: 12 },
     contentBody: { flex: 1 },
+    menuBackdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'flex-start',
+      alignItems: 'flex-end',
+      paddingTop: Platform.OS === 'web' ? 56 : 72,
+      paddingRight: 12,
+    },
+    menuCard: {
+      width: 220,
+      backgroundColor: colors.bgCard,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 6,
+      overflow: 'hidden',
+    },
+    menuEmail: {
+      color: colors.textMuted,
+      fontSize: 11,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    menuItem: {
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    menuItemText: { color: colors.text, fontWeight: '700', fontSize: 14 },
+    menuDanger: { borderTopWidth: 1, borderTopColor: colors.border },
+    menuDangerText: { color: colors.danger, fontWeight: '700', fontSize: 14 },
   });
 }

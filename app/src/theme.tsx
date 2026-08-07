@@ -82,6 +82,22 @@ export const statusColors: Record<string, string> = {
   reopen: '#D93838',
 };
 
+/** Standard control sizes — keep buttons/fields/cards compact */
+export const spacing = {
+  inputPadV: 8,
+  inputPadH: 12,
+  inputFont: 14,
+  inputRadius: 10,
+  btnPadV: 9,
+  btnPadH: 14,
+  btnFont: 14,
+  btnRadius: 10,
+  cardPad: 12,
+  cardRadius: 12,
+  cardGap: 8,
+  labelFont: 12,
+};
+
 /** @deprecated Prefer useTheme().colors — kept for gradual migration */
 export let colors: ThemeColors = { ...darkColors };
 

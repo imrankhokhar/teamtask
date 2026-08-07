@@ -9,7 +9,7 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 
 type Props = TextInputProps & {
   containerStyle?: StyleProp<ViewStyle>;
@@ -52,25 +52,26 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.bgElevated,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
-      paddingRight: 48,
+      borderRadius: spacing.inputRadius,
+      paddingHorizontal: spacing.inputPadH,
+      paddingVertical: spacing.inputPadV,
+      paddingRight: 42,
       color: colors.text,
-      fontSize: 16,
+      fontSize: spacing.inputFont,
+      minHeight: 38,
     },
     inputError: {
       borderColor: colors.danger,
     },
     eye: {
       position: 'absolute',
-      right: 12,
-      paddingVertical: 4,
-      paddingHorizontal: 4,
+      right: 10,
+      paddingVertical: 2,
+      paddingHorizontal: 2,
     },
     eyeGlyph: {
       color: colors.textMuted,
-      fontSize: 20,
+      fontSize: 16,
       fontWeight: '700',
     },
   });

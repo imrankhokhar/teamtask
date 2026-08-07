@@ -8,7 +8,7 @@ import {
   StyleProp,
   ViewStyle,
 } from 'react-native';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 
 type Props = TextInputProps & {
   label: string;
@@ -16,7 +16,6 @@ type Props = TextInputProps & {
   error?: string;
   hint?: string;
   containerStyle?: StyleProp<ViewStyle>;
-  /** Custom control instead of TextInput (e.g. PasswordField) */
   children?: React.ReactNode;
 };
 
@@ -56,38 +55,39 @@ export default function FormField({
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    wrap: { marginBottom: 4 },
+    wrap: { marginBottom: 2 },
     label: {
       color: colors.textMuted,
-      marginBottom: 8,
+      marginBottom: 5,
       fontWeight: '700',
-      fontSize: 13,
+      fontSize: spacing.labelFont,
     },
     req: { color: colors.danger, fontWeight: '800' },
     input: {
       backgroundColor: colors.bgElevated,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      borderRadius: spacing.inputRadius,
+      paddingHorizontal: spacing.inputPadH,
+      paddingVertical: spacing.inputPadV,
       color: colors.text,
-      fontSize: 16,
+      fontSize: spacing.inputFont,
+      minHeight: 38,
     },
     inputError: {
       borderColor: colors.danger,
     },
     error: {
       color: colors.danger,
-      fontSize: 12,
+      fontSize: 11,
       fontWeight: '600',
-      marginTop: 6,
+      marginTop: 4,
     },
     hint: {
       color: colors.textMuted,
-      fontSize: 12,
-      marginTop: 6,
-      lineHeight: 17,
+      fontSize: 11,
+      marginTop: 4,
+      lineHeight: 15,
     },
   });
 }

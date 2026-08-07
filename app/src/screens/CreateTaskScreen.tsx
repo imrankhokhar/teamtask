@@ -10,9 +10,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { api, TASK_STATUSES, statusLabel, ApiError } from '../api';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import FormField from '../components/FormField';
 import LoadingView from '../components/LoadingView';
+import ReminderPickerModal from '../components/ReminderPickerModal';
 
 /** Accepts 2026-07-30T7:40 or 2026-07-30T07:40 — browsers reject single-digit hours. */
 function parseReminderLocal(raw: string): Date {
@@ -63,6 +64,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
   const [checklistText, setChecklistText] = useState('');
   const [checklist, setChecklist] = useState<string[]>([]);
   const [remindersLocal, setRemindersLocal] = useState<string[]>(['']);
+  const [pickerIndex, setPickerIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [msgError, setMsgError] = useState(false);
@@ -291,16 +293,14 @@ export default function CreateTaskScreen({ navigation, route }: any) {
       <Text style={styles.label}>Reminders (local time on this device)</Text>
       {remindersLocal.map((value, index) => (
         <View key={index} style={styles.row}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            value={value}
-            onChangeText={(text) =>
-              setRemindersLocal((list) => list.map((v, i) => (i === index ? text : v)))
-            }
-            placeholder="YYYY-MM-DDTHH:mm  e.g. 2026-07-30T07:40"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-          />
+          <TouchableOpacity
+            style={[styles.input, styles.reminderBtn, { flex: 1 }]}
+            onPress={() => setPickerIndex(index)}
+          >
+            <Text style={value ? styles.reminderValue : styles.reminderPlaceholder}>
+              {value || 'Tap to pick date & time'}
+            </Text>
+          </TouchableOpacity>
           {remindersLocal.length > 1 ? (
             <TouchableOpacity
               style={styles.addBtn}
@@ -318,9 +318,8 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         <Text style={styles.addBtnText}>+ Add another reminder</Text>
       </TouchableOpacity>
       <Text style={styles.hint}>
-        Use two-digit hour if needed (07:40). Assignees are notified when the task is created
+        Assignees are notified when the task is created
         {editing ? ' or updated' : ''} and when each reminder is due.
-        {Platform.OS === 'web' ? ' Desktop also shows a system notification when allowed.' : ''}
       </Text>
 
       <TouchableOpacity style={styles.save} onPress={save} disabled={busy}>
@@ -332,6 +331,16 @@ export default function CreateTaskScreen({ navigation, route }: any) {
           </Text>
         )}
       </TouchableOpacity>
+
+      <ReminderPickerModal
+        visible={pickerIndex != null}
+        value={pickerIndex != null ? remindersLocal[pickerIndex] || '' : ''}
+        onClose={() => setPickerIndex(null)}
+        onSave={(local) => {
+          if (pickerIndex == null) return;
+          setRemindersLocal((list) => list.map((v, i) => (i === pickerIndex ? local : v)));
+        }}
+      />
     </ScrollView>
   );
 }
@@ -340,13 +349,14 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
     back: { color: colors.info, marginTop: Platform.OS === 'web' ? 12 : 48, marginBottom: 4 },
-    h1: { color: colors.text, fontSize: 26, fontWeight: '800', marginBottom: 12 },
+    h1: { color: colors.text, fontSize: 22, fontWeight: '800', marginBottom: 10 },
     banner: {
       borderRadius: 10,
-      padding: 12,
-      marginBottom: 12,
+      padding: 10,
+      marginBottom: 10,
       borderWidth: 1,
       fontWeight: '600',
+      fontSize: 13,
     },
     bannerOk: {
       color: colors.accent,
@@ -358,49 +368,60 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.errorBg,
       borderColor: colors.danger,
     },
-    label: { color: colors.textMuted, marginTop: 14, marginBottom: 8, fontWeight: '600' },
+    label: {
+      color: colors.textMuted,
+      marginTop: 12,
+      marginBottom: 6,
+      fontWeight: '600',
+      fontSize: 12,
+    },
     input: {
       backgroundColor: colors.bgElevated,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.inputRadius,
+      paddingHorizontal: spacing.inputPadH,
+      paddingVertical: spacing.inputPadV,
       color: colors.text,
+      fontSize: spacing.inputFont,
+      minHeight: 38,
     },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    reminderBtn: { justifyContent: 'center' },
+    reminderValue: { color: colors.text, fontSize: spacing.inputFont },
+    reminderPlaceholder: { color: colors.textMuted, fontSize: spacing.inputFont },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     chip: {
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
       backgroundColor: colors.bgElevated,
     },
     chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-    chipText: { color: colors.text, textTransform: 'capitalize', fontSize: 13 },
+    chipText: { color: colors.text, textTransform: 'capitalize', fontSize: 12 },
     chipTextOn: { color: colors.onAccent, fontWeight: '700' },
     row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
     addBtn: {
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      borderRadius: spacing.btnRadius,
+      paddingHorizontal: spacing.btnPadH,
+      paddingVertical: spacing.btnPadV,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    addBtnText: { color: colors.accent, fontWeight: '700' },
-    checkLine: { color: colors.text, marginTop: 6 },
-    hint: { color: colors.textMuted, fontSize: 12, marginTop: 8, lineHeight: 18 },
+    addBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
+    checkLine: { color: colors.text, marginTop: 4, fontSize: 13 },
+    hint: { color: colors.textMuted, fontSize: 11, marginTop: 6, lineHeight: 16 },
     save: {
-      marginTop: 24,
+      marginTop: 18,
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
-      minHeight: 50,
+      minHeight: 38,
       justifyContent: 'center',
     },
-    saveText: { color: colors.onAccent, fontWeight: '800', fontSize: 16 },
+    saveText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
   });
 }

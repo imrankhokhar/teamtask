@@ -8,6 +8,7 @@ export type User = {
   firstName?: string;
   lastName?: string;
   email: string;
+  avatarUrl?: string | null;
   role: 'admin' | 'user';
   roleId?: string | null;
   roleName?: string;
@@ -59,6 +60,7 @@ function applyUser(raw: any): User {
     firstName: raw.firstName,
     lastName: raw.lastName,
     email: raw.email,
+    avatarUrl: raw.avatarUrl || null,
     role: raw.role === 'admin' ? 'admin' : 'user',
     roleId: raw.roleId,
     roleName: raw.roleName || raw.role,

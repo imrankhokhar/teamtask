@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, TASK_STATUSES, statusLabel } from '../api';
-import { useTheme, ThemeColors, statusColors } from '../theme';
+import { useTheme, ThemeColors, statusColors, spacing } from '../theme';
 import { useAuth } from '../auth';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
+import ReminderPickerModal from '../components/ReminderPickerModal';
 
 export default function TaskDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
@@ -26,6 +27,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [newCheck, setNewCheck] = useState('');
   const [remindersLocal, setRemindersLocal] = useState<string[]>(['']);
+  const [pickerIndex, setPickerIndex] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
@@ -245,16 +247,14 @@ export default function TaskDetailScreen({ route, navigation }: any) {
         <Text style={styles.label}>Reminders</Text>
         {remindersLocal.map((value, index) => (
           <View key={index} style={styles.row}>
-            <TextInput
-              style={[styles.input, { flex: 1, marginTop: 0 }]}
-              value={value}
-              onChangeText={(text) =>
-                setRemindersLocal((list) => list.map((v, i) => (i === index ? text : v)))
-              }
-              placeholder="YYYY-MM-DDTHH:mm"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-            />
+            <TouchableOpacity
+              style={[styles.input, styles.reminderBtn, { flex: 1, marginTop: 0 }]}
+              onPress={() => setPickerIndex(index)}
+            >
+              <Text style={value ? styles.reminderValue : styles.reminderPlaceholder}>
+                {value || 'Tap to pick date & time'}
+              </Text>
+            </TouchableOpacity>
             {remindersLocal.length > 1 ? (
               <TouchableOpacity
                 style={styles.miniBtn}
@@ -345,6 +345,15 @@ export default function TaskDetailScreen({ route, navigation }: any) {
           </TouchableOpacity>
         ) : null}
       </ScrollView>
+      <ReminderPickerModal
+        visible={pickerIndex != null}
+        value={pickerIndex != null ? remindersLocal[pickerIndex] || '' : ''}
+        onClose={() => setPickerIndex(null)}
+        onSave={(local) => {
+          if (pickerIndex == null) return;
+          setRemindersLocal((list) => list.map((v, i) => (i === pickerIndex ? local : v)));
+        }}
+      />
       {dialog}
     </>
   );
@@ -358,13 +367,13 @@ function makeStyles(colors: ThemeColors) {
     title: { color: colors.text, fontSize: 26, fontWeight: '800' },
     editBtn: {
       backgroundColor: colors.bgCard,
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+      borderRadius: spacing.btnRadius,
+      paddingHorizontal: spacing.btnPadH,
+      paddingVertical: spacing.btnPadV,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    editBtnText: { color: colors.accent, fontWeight: '700' },
+    editBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     desc: { color: colors.textMuted, marginTop: 8, marginBottom: 12 },
     statusPill: {
       alignSelf: 'flex-start',
@@ -391,26 +400,33 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.bgElevated,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderRadius: spacing.inputRadius,
+      paddingHorizontal: spacing.inputPadH,
+      paddingVertical: spacing.inputPadV,
       color: colors.text,
+      fontSize: spacing.inputFont,
+      minHeight: 38,
       marginTop: 8,
     },
+    reminderBtn: { justifyContent: 'center' },
+    reminderValue: { color: colors.text, fontSize: spacing.inputFont },
+    reminderPlaceholder: { color: colors.textMuted, fontSize: spacing.inputFont },
     secondaryBtn: {
       marginTop: 10,
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
+      minHeight: 38,
+      justifyContent: 'center',
     },
-    secondaryBtnText: { color: colors.accent, fontWeight: '700' },
+    secondaryBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     checkCard: {
       backgroundColor: colors.bgCard,
-      borderRadius: 14,
-      padding: 12,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 12,
@@ -442,9 +458,9 @@ function makeStyles(colors: ThemeColors) {
     rowBtns: { flexDirection: 'row', gap: 8, marginTop: 8 },
     miniBtn: {
       backgroundColor: colors.accentDim,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderRadius: spacing.btnRadius,
+      paddingHorizontal: spacing.btnPadH,
+      paddingVertical: spacing.btnPadV,
     },
     dangerBtn: { backgroundColor: colors.danger },
     miniBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
@@ -453,10 +469,12 @@ function makeStyles(colors: ThemeColors) {
     deleteBtn: {
       marginTop: 20,
       backgroundColor: colors.danger,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
+      minHeight: 38,
+      justifyContent: 'center',
     },
-    deleteBtnText: { color: '#fff', fontWeight: '800' },
+    deleteBtnText: { color: '#fff', fontWeight: '800', fontSize: spacing.btnFont },
   });
 }

@@ -13,7 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
@@ -318,29 +318,31 @@ function makeStyles(colors: ThemeColors) {
     chipTextOn: { color: colors.onAccent, fontWeight: '700' },
     btn: {
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       marginBottom: 8,
+      minHeight: 38,
+      justifyContent: 'center',
     },
-    btnText: { color: colors.onAccent, fontWeight: '800' },
+    btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
     secondary: {
-      borderRadius: 12,
-      paddingVertical: 10,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
     },
-    secondaryText: { color: colors.accent, fontWeight: '700' },
+    secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     card: {
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
     },
-    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
-    meta: { color: colors.textMuted, marginTop: 6, lineHeight: 20 },
+    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
+    meta: { color: colors.textMuted, marginTop: 4, fontSize: 12, lineHeight: 18 },
     actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
     mini: {
       backgroundColor: colors.accentDim,

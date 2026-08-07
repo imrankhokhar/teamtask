@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, statusLabel } from '../api';
-import { useTheme, ThemeColors, statusColors } from '../theme';
+import { useTheme, ThemeColors, statusColors, spacing } from '../theme';
 import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
@@ -80,7 +80,7 @@ export default function TasksScreen({ navigation }: any) {
                     <Text style={styles.badgeText}>{statusLabel(item.status)}</Text>
                   </View>
                 </View>
-                <Text style={styles.meta} numberOfLines={2}>
+                <Text style={styles.meta} numberOfLines={1}>
                   {item.description || 'No description'}
                 </Text>
                 <Text style={styles.meta}>
@@ -142,13 +142,13 @@ function makeStyles(colors: ThemeColors) {
     root: { flex: 1, backgroundColor: colors.bg },
     card: {
       backgroundColor: colors.bgCard,
-      borderRadius: 14,
-      padding: 14,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
     },
     row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'center' },
-    cardTitle: { color: colors.text, fontSize: 17, fontWeight: '700', flex: 1 },
+    cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700', flex: 1 },
     badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
     badgeText: {
       color: colors.onAccent,
@@ -156,7 +156,7 @@ function makeStyles(colors: ThemeColors) {
       fontWeight: '700',
       textTransform: 'capitalize',
     },
-    meta: { color: colors.textMuted, marginTop: 8, fontSize: 13 },
+    meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
     empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
     fabRow: {
       position: 'absolute',
@@ -168,8 +168,8 @@ function makeStyles(colors: ThemeColors) {
     fab: {
       backgroundColor: colors.accent,
       borderRadius: 999,
-      paddingHorizontal: 18,
-      paddingVertical: 14,
+      paddingHorizontal: 14,
+      paddingVertical: spacing.btnPadV,
     },
     fabText: { color: colors.onAccent, fontWeight: '800' },
     deleteLinkWrap: { marginTop: 10, alignSelf: 'flex-start' },

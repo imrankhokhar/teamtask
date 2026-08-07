@@ -95,6 +95,7 @@ function publicUser(u, db) {
     firstName: u.firstName || (u.name || '').split(' ')[0] || '',
     lastName: u.lastName || (u.name || '').split(' ').slice(1).join(' ') || '',
     email: u.email,
+    avatarUrl: u.avatarUrl || null,
     role: role?.name === 'Admin' || u.role === 'admin' ? 'admin' : 'user',
     roleId: u.roleId || role?.id || null,
     roleName: role?.name || u.role || 'Member',
@@ -450,6 +451,100 @@ app.post('/api/me/password', authRequired, (req, res) => {
   });
 
   res.json({ ok: true, message: 'Password changed' });
+});
+
+app.patch('/api/me', authRequired, (req, res) => {
+  const { firstName, lastName, name, email, currentPassword, newPassword } = req.body || {};
+  const fields = {};
+  const db0 = readDb();
+  const me = db0.users.find((u) => u.id === req.user.id);
+  if (!me) return res.status(404).json({ error: 'User not found' });
+
+  const fn = firstName != null ? String(firstName).trim() : me.firstName;
+  const ln = lastName != null ? String(lastName).trim() : me.lastName;
+  const fullName =
+    name != null
+      ? String(name).trim()
+      : `${fn || ''} ${ln || ''}`.trim() || me.name;
+  const cleanEmail =
+    email != null ? String(email).trim().toLowerCase() : me.email;
+
+  if (!fullName) fields.name = 'Name is required';
+  if (!cleanEmail) fields.email = 'Email is required';
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    fields.email = 'Enter a valid email address';
+  }
+  if (
+    cleanEmail !== me.email &&
+    db0.users.some((u) => u.id !== me.id && u.email.toLowerCase() === cleanEmail)
+  ) {
+    fields.email = 'This email is already in use';
+  }
+
+  if (newPassword) {
+    if (!currentPassword) fields.currentPassword = 'Current password is required';
+    else if (!bcrypt.compareSync(String(currentPassword), me.passwordHash)) {
+      fields.currentPassword = 'Current password is incorrect';
+    }
+    if (String(newPassword).length < 6) {
+      fields.newPassword = 'Password must be at least 6 characters';
+    }
+  }
+
+  if (Object.keys(fields).length) {
+    return res.status(400).json({ error: 'Please fix the highlighted fields', fields });
+  }
+
+  updateDb((db) => {
+    const u = db.users.find((x) => x.id === me.id);
+    if (!u) return;
+    u.firstName = fn || fullName.split(' ')[0] || '';
+    u.lastName = ln || fullName.split(' ').slice(1).join(' ') || '';
+    u.name = fullName;
+    u.email = cleanEmail;
+    if (newPassword) u.passwordHash = bcrypt.hashSync(String(newPassword), 10);
+  });
+
+  const db = readDb();
+  const user = db.users.find((u) => u.id === me.id);
+  res.json({ user: publicUser(user, db), message: 'Profile updated' });
+});
+
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOADS,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '') || '.jpg';
+      cb(null, `avatar-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /^image\//i.test(file.mimetype || '') || /\.(png|jpe?g|gif|webp)$/i.test(file.originalname || '');
+    if (!ok) return cb(new Error('Image files only'));
+    cb(null, true);
+  },
+});
+
+app.post('/api/me/avatar', authRequired, avatarUpload.single('avatar'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'Avatar image required' });
+  const url = `/uploads/${req.file.filename}`;
+  updateDb((db) => {
+    const u = db.users.find((x) => x.id === req.user.id);
+    if (!u) return;
+    if (u.avatarUrl) {
+      const old = path.join(UPLOADS, path.basename(u.avatarUrl));
+      try {
+        if (fs.existsSync(old)) fs.unlinkSync(old);
+      } catch {
+        // ignore
+      }
+    }
+    u.avatarUrl = url;
+  });
+  const db = readDb();
+  const user = db.users.find((u) => u.id === req.user.id);
+  res.json({ user: publicUser(user, db), avatarUrl: url });
 });
 
 app.get('/api/me', authRequired, (req, res) => {

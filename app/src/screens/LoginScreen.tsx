@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth';
 import { api, ApiError } from '../api';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
 
@@ -298,14 +298,14 @@ function makeStyles(colors: ThemeColors) {
     },
     btn: {
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       marginTop: 8,
-      minHeight: 50,
+      minHeight: 38,
       justifyContent: 'center',
     },
-    btnText: { color: colors.onAccent, fontWeight: '700', fontSize: 16 },
+    btnText: { color: colors.onAccent, fontWeight: '700', fontSize: spacing.btnFont },
     switch: { color: colors.info, textAlign: 'center', marginTop: 8 },
   });
 }
