@@ -17,13 +17,38 @@ const DB_PATH = path.join(DATA_DIR, 'db.json');
 
 /** @type {object|null} */
 let memoryDb = null;
+
+/** @type {'postgres'|'mongodb'|'file'|null} */
+let storeMode = null;
+
+/** @type {import('pg').Pool|null} */
+let pgPool = null;
+
 /** @type {import('mongodb').MongoClient|null} */
 let mongoClient = null;
 /** @type {import('mongodb').Collection|null} */
 let mongoCol = null;
-let mongoFlushTimer = null;
-let mongoDirty = false;
+
+let remoteDirty = false;
+let remoteFlushTimer = null;
 const DOC_ID = 'teamtask-main';
+
+function getPostgresUri() {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URI ||
+    process.env.TEAMTASK_DATABASE_URL ||
+    ''
+  ).trim();
+}
+
+function getMongoUri() {
+  return (process.env.MONGODB_URI || process.env.TEAMTASK_MONGODB_URI || '').trim();
+}
+
+function isCloudDbConfigured() {
+  return Boolean(getPostgresUri() || getMongoUri());
+}
 
 function createSeededDb() {
   const now = new Date().toISOString();
@@ -146,7 +171,7 @@ function ensureFileDb() {
   }
   try {
     const current = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-    if (!Array.isArray(current.users) || current.users.length === 0) {
+    if (!current?.users?.length) {
       fs.writeFileSync(DB_PATH, JSON.stringify(createSeededDb(), null, 2));
       return;
     }
@@ -158,9 +183,22 @@ function ensureFileDb() {
   }
 }
 
+async function flushPostgres() {
+  if (!pgPool || !memoryDb || !remoteDirty) return;
+  remoteDirty = false;
+  const data = clone(memoryDb);
+  await pgPool.query(
+    `INSERT INTO appstate (id, data, updated_at)
+     VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (id) DO UPDATE
+     SET data = EXCLUDED.data, updated_at = NOW()`,
+    [DOC_ID, JSON.stringify(data)]
+  );
+}
+
 async function flushMongo() {
-  if (!mongoCol || !memoryDb || !mongoDirty) return;
-  mongoDirty = false;
+  if (!mongoCol || !memoryDb || !remoteDirty) return;
+  remoteDirty = false;
   const data = clone(memoryDb);
   await mongoCol.updateOne(
     { _id: DOC_ID },
@@ -169,48 +207,95 @@ async function flushMongo() {
   );
 }
 
-function scheduleMongoFlush() {
-  mongoDirty = true;
-  if (mongoFlushTimer) return;
-  mongoFlushTimer = setTimeout(() => {
-    mongoFlushTimer = null;
-    flushMongo().catch((err) => console.error('Mongo flush failed:', err.message));
+async function flushRemote() {
+  if (storeMode === 'postgres') return flushPostgres();
+  if (storeMode === 'mongodb') return flushMongo();
+}
+
+function scheduleRemoteFlush() {
+  remoteDirty = true;
+  if (remoteFlushTimer) return;
+  remoteFlushTimer = setTimeout(() => {
+    remoteFlushTimer = null;
+    flushRemote().catch((err) => console.error('DB flush failed:', err.message));
   }, 200);
+}
+
+async function initPostgres(uri) {
+  const { Pool } = require('pg');
+  pgPool = new Pool({
+    connectionString: uri,
+    ssl: uri.includes('sslmode=require') || uri.includes('neon.tech') || uri.includes('supabase')
+      ? { rejectUnauthorized: false }
+      : undefined,
+  });
+
+  await pgPool.query(`
+    CREATE TABLE IF NOT EXISTS appstate (
+      id TEXT PRIMARY KEY,
+      data JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  const result = await pgPool.query('SELECT data FROM appstate WHERE id = $1', [DOC_ID]);
+  const row = result.rows[0];
+  if (row?.data && Array.isArray(row.data.users) && row.data.users.length) {
+    memoryDb = row.data;
+  } else {
+    memoryDb = createSeededDb();
+    remoteDirty = true;
+    await flushPostgres();
+  }
+  if (migrateDb(memoryDb)) {
+    remoteDirty = true;
+    await flushPostgres();
+  }
+  storeMode = 'postgres';
+  console.log('TeamTask data store: PostgreSQL (shared cloud via DATABASE_URL)');
+  return { mode: 'postgres' };
+}
+
+async function initMongo(uri) {
+  const { MongoClient } = require('mongodb');
+  mongoClient = new MongoClient(uri);
+  await mongoClient.connect();
+  const dbName = process.env.MONGODB_DB || 'teamtask';
+  mongoCol = mongoClient.db(dbName).collection('appstate');
+  const existing = await mongoCol.findOne({ _id: DOC_ID });
+  if (existing?.data && Array.isArray(existing.data.users) && existing.data.users.length) {
+    memoryDb = existing.data;
+  } else {
+    memoryDb = createSeededDb();
+    remoteDirty = true;
+    await flushMongo();
+  }
+  if (migrateDb(memoryDb)) {
+    remoteDirty = true;
+    await flushMongo();
+  }
+  storeMode = 'mongodb';
+  console.log('TeamTask data store: MongoDB (shared cloud)');
+  return { mode: 'mongodb' };
 }
 
 /**
  * Call once before accepting traffic.
- * Uses MongoDB when MONGODB_URI is set (shared cloud), else local JSON file.
+ * Priority: DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
  */
 async function initDb() {
-  const uri = process.env.MONGODB_URI || process.env.TEAMTASK_MONGODB_URI;
-  if (uri) {
-    const { MongoClient } = require('mongodb');
-    mongoClient = new MongoClient(uri);
-    await mongoClient.connect();
-    const dbName = process.env.MONGODB_DB || 'teamtask';
-    mongoCol = mongoClient.db(dbName).collection('appstate');
-    const existing = await mongoCol.findOne({ _id: DOC_ID });
-    if (existing?.data && Array.isArray(existing.data.users) && existing.data.users.length) {
-      memoryDb = existing.data;
-    } else {
-      memoryDb = createSeededDb();
-      mongoDirty = true;
-      await flushMongo();
-    }
-    if (migrateDb(memoryDb)) {
-      mongoDirty = true;
-      await flushMongo();
-    }
-    console.log('TeamTask data store: MongoDB (shared cloud)');
-    return { mode: 'mongodb' };
-  }
+  const pgUri = getPostgresUri();
+  if (pgUri) return initPostgres(pgUri);
+
+  const mongoUri = getMongoUri();
+  if (mongoUri) return initMongo(mongoUri);
 
   ensureFileDb();
   memoryDb = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
   if (migrateDb(memoryDb)) {
     fs.writeFileSync(DB_PATH, JSON.stringify(memoryDb, null, 2));
   }
+  storeMode = 'file';
   console.log('TeamTask data store: local file', DB_PATH);
   return { mode: 'file' };
 }
@@ -227,8 +312,8 @@ function readDb() {
 
 function writeDb(db) {
   memoryDb = db;
-  if (mongoCol) {
-    scheduleMongoFlush();
+  if (storeMode === 'postgres' || storeMode === 'mongodb') {
+    scheduleRemoteFlush();
     return;
   }
   ensureFileDb();
@@ -243,16 +328,21 @@ function updateDb(mutator) {
 }
 
 async function closeDb() {
-  if (mongoFlushTimer) {
-    clearTimeout(mongoFlushTimer);
-    mongoFlushTimer = null;
+  if (remoteFlushTimer) {
+    clearTimeout(remoteFlushTimer);
+    remoteFlushTimer = null;
   }
-  await flushMongo().catch(() => undefined);
+  await flushRemote().catch(() => undefined);
+  if (pgPool) {
+    await pgPool.end().catch(() => undefined);
+    pgPool = null;
+  }
   if (mongoClient) {
     await mongoClient.close().catch(() => undefined);
     mongoClient = null;
     mongoCol = null;
   }
+  storeMode = null;
 }
 
 module.exports = {
@@ -261,6 +351,8 @@ module.exports = {
   readDb,
   writeDb,
   updateDb,
+  isCloudDbConfigured,
+  getPostgresUri,
   DB_PATH,
   DATA_DIR,
   createSeededDb,

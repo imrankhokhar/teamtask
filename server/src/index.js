@@ -11,7 +11,7 @@ const { WebSocketServer } = require('ws');
 const { v4: uuid } = require('uuid');
 const jwt = require('jsonwebtoken');
 
-const { readDb, updateDb, initDb } = require('./db');
+const { readDb, updateDb, initDb, isCloudDbConfigured } = require('./db');
 const { signToken, authRequired, adminRequired, requirePerm, JWT_SECRET } = require('./auth');
 const {
   MODULES,
@@ -1348,7 +1348,7 @@ app.post(
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
-    cloudMode: Boolean(process.env.MONGODB_URI || process.env.TEAMTASK_MONGODB_URI),
+    cloudMode: isCloudDbConfigured(),
     time: new Date().toISOString(),
   });
 });
@@ -1509,7 +1509,7 @@ app.get('/api/lan-info', (_req, res) => {
       }
     }
   }
-  const cloudMode = Boolean(process.env.MONGODB_URI || process.env.TEAMTASK_MONGODB_URI);
+  const cloudMode = isCloudDbConfigured();
   res.json({
     port: Number(PORT),
     addresses,
