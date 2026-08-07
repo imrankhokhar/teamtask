@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,14 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { getApiBaseUrl, setApiBaseUrl, api, refreshApiUrl } from '../api';
-import { colors } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
 export default function ConnectionScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [url, setUrl] = useState('');
   const [lan, setLan] = useState<any>(null);
   const [busy, setBusy] = useState(false);
@@ -81,7 +84,11 @@ export default function ConnectionScreen({ navigation }: any) {
       />
 
       <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
-        <Text style={styles.btnText}>{busy ? 'Testing…' : 'Save & test'}</Text>
+        {busy ? (
+          <ActivityIndicator color={colors.onAccent} />
+        ) : (
+          <Text style={styles.btnText}>Save & test</Text>
+        )}
       </TouchableOpacity>
 
       {lan?.publicUrl ? (
@@ -105,37 +112,41 @@ export default function ConnectionScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, padding: 16 },
-  back: { color: colors.info, marginTop: 48 },
-  title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 12 },
-  sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 16 },
-  label: { color: colors.textMuted, marginBottom: 8, fontWeight: '600' },
-  input: {
-    backgroundColor: colors.bgElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    color: colors.text,
-    marginBottom: 12,
-  },
-  btn: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  btnText: { color: '#062016', fontWeight: '800' },
-  card: {
-    marginTop: 20,
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 8,
-  },
-  link: { color: colors.accent, marginTop: 4 },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg, padding: 16 },
+    back: { color: colors.info, marginTop: 48 },
+    title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 12 },
+    sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 16 },
+    label: { color: colors.textMuted, marginBottom: 8, fontWeight: '600' },
+    input: {
+      backgroundColor: colors.bgElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      color: colors.text,
+      marginBottom: 12,
+    },
+    btn: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      minHeight: 50,
+      justifyContent: 'center',
+    },
+    btnText: { color: colors.onAccent, fontWeight: '800' },
+    card: {
+      marginTop: 20,
+      backgroundColor: colors.bgCard,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 8,
+    },
+    link: { color: colors.accent, marginTop: 4 },
+  });
+}

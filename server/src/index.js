@@ -288,12 +288,22 @@ app.post('/api/auth/register', (req, res) => {
   const fn = String(firstName || '').trim();
   const ln = String(lastName || '').trim();
   const fullName = String(name || `${fn} ${ln}`).trim();
-  if (!fullName || !email || !password) {
-    return res.status(400).json({ error: 'name (or first/last), email, password required' });
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const fields = {};
+  if (!fullName) fields.name = 'Full name is required';
+  if (!cleanEmail) fields.email = 'Email is required';
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) fields.email = 'Enter a valid email address';
+  if (!password) fields.password = 'Password is required';
+  else if (String(password).length < 6) fields.password = 'Password must be at least 6 characters';
+  if (Object.keys(fields).length) {
+    return res.status(400).json({ error: 'Please fix the highlighted fields', fields });
   }
   const db = readDb();
-  if (db.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
-    return res.status(409).json({ error: 'Email already registered' });
+  if (db.users.some((u) => u.email.toLowerCase() === cleanEmail)) {
+    return res.status(409).json({
+      error: 'Email already registered',
+      fields: { email: 'This email is already registered' },
+    });
   }
   const memberRole =
     (db.roles || []).find((r) => r.id === roleId) ||
@@ -305,7 +315,7 @@ app.post('/api/auth/register', (req, res) => {
     firstName: fn || fullName.split(' ')[0] || '',
     lastName: ln || fullName.split(' ').slice(1).join(' ') || '',
     name: fullName,
-    email: email.trim().toLowerCase(),
+    email: cleanEmail,
     passwordHash: bcrypt.hashSync(password, 10),
     role: assignedRole?.name === 'Admin' ? 'admin' : 'user',
     roleId: assignedRole?.id || null,
@@ -319,12 +329,20 @@ app.post('/api/auth/register', (req, res) => {
 
 app.post('/api/auth/login', (req, res) => {
   const { email, password } = req.body || {};
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const fields = {};
+  if (!cleanEmail) fields.email = 'Email is required';
+  if (!password) fields.password = 'Password is required';
+  if (Object.keys(fields).length) {
+    return res.status(400).json({ error: 'Please fix the highlighted fields', fields });
+  }
   const db = readDb();
-  const user = db.users.find(
-    (u) => u.email.toLowerCase() === String(email || '').toLowerCase()
-  );
+  const user = db.users.find((u) => u.email.toLowerCase() === cleanEmail);
   if (!user || !bcrypt.compareSync(password || '', user.passwordHash)) {
-    return res.status(401).json({ error: 'Invalid credentials' });
+    return res.status(401).json({
+      error: 'Invalid email or password',
+      fields: { password: 'Invalid email or password' },
+    });
   }
   res.json({ token: signToken(user), user: publicUser(user, db) });
 });
@@ -487,12 +505,22 @@ app.post('/api/users', authRequired, requirePerm('users.create'), (req, res) => 
   const fn = String(firstName || '').trim();
   const ln = String(lastName || '').trim();
   const cleanEmail = String(email || '').trim().toLowerCase();
-  if (!fn || !ln || !cleanEmail || !password) {
-    return res.status(400).json({ error: 'firstName, lastName, email, password required' });
+  const fields = {};
+  if (!fn) fields.firstName = 'First name is required';
+  if (!ln) fields.lastName = 'Last name is required';
+  if (!cleanEmail) fields.email = 'Email is required';
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) fields.email = 'Enter a valid email address';
+  if (!password) fields.password = 'Password is required';
+  else if (String(password).length < 6) fields.password = 'Password must be at least 6 characters';
+  if (Object.keys(fields).length) {
+    return res.status(400).json({ error: 'Please fix the highlighted fields', fields });
   }
   const db = readDb();
   if (db.users.some((u) => u.email.toLowerCase() === cleanEmail)) {
-    return res.status(409).json({ error: 'Email already registered' });
+    return res.status(409).json({
+      error: 'Email already registered',
+      fields: { email: 'This email is already registered' },
+    });
   }
   const role =
     (db.roles || []).find((r) => r.id === roleId) ||
@@ -839,9 +867,17 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
     reminders: remindersInput,
   } = req.body || {};
 
-  if (!title) return res.status(400).json({ error: 'title required' });
+  if (!title) {
+    return res.status(400).json({
+      error: 'Please fix the highlighted fields',
+      fields: { title: 'Title is required' },
+    });
+  }
   if (!TASK_STATUSES.includes(status)) {
-    return res.status(400).json({ error: `status must be one of: ${TASK_STATUSES.join(', ')}` });
+    return res.status(400).json({
+      error: `Status must be one of: ${TASK_STATUSES.join(', ')}`,
+      fields: { status: 'Invalid status' },
+    });
   }
 
   const reminderAts = Array.isArray(remindersInput)

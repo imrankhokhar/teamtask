@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,17 +7,18 @@ import {
   StyleSheet,
   ScrollView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
-import { api, TASK_STATUSES, statusLabel } from '../api';
-import { colors } from '../theme';
+import { api, TASK_STATUSES, statusLabel, ApiError } from '../api';
+import { useTheme, ThemeColors } from '../theme';
+import FormField from '../components/FormField';
+import LoadingView from '../components/LoadingView';
 
 /** Accepts 2026-07-30T7:40 or 2026-07-30T07:40 — browsers reject single-digit hours. */
 function parseReminderLocal(raw: string): Date {
   const s = raw.trim();
   if (!s) throw new Error('Empty reminder');
-  const m = s.match(
-    /^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?$/
-  );
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{1,2}):(\d{2})(?::(\d{2}))?$/);
   if (m) {
     const [, y, mo, d, h, mi, sec] = m;
     const dt = new Date(
@@ -47,6 +48,8 @@ function formatReminderLocal(iso: string | null | undefined): string {
 }
 
 export default function CreateTaskScreen({ navigation, route }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const taskId: string | undefined = route?.params?.taskId;
   const editing = Boolean(taskId);
 
@@ -64,6 +67,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
   const [msg, setMsg] = useState('');
   const [msgError, setMsgError] = useState(false);
   const [loading, setLoading] = useState(editing);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     (async () => {
@@ -105,9 +109,16 @@ export default function CreateTaskScreen({ navigation, route }: any) {
     setMsg(text);
   }
 
+  function validate(): boolean {
+    const next: Record<string, string> = {};
+    if (!title.trim()) next.title = 'Title is required';
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
+  }
+
   async function save() {
-    if (!title.trim()) {
-      showMsg('Title is required', true);
+    if (!validate()) {
+      showMsg('Please fix the highlighted fields', true);
       return;
     }
     try {
@@ -146,6 +157,9 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         else navigation.navigate('Tasks');
       }, 400);
     } catch (e: any) {
+      if (e instanceof ApiError && e.fields) {
+        setFieldErrors(e.fields);
+      }
       showMsg(e.message || (editing ? 'Failed to update task' : 'Failed to create task'), true);
     } finally {
       setBusy(false);
@@ -153,11 +167,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
   }
 
   if (loading) {
-    return (
-      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: colors.textMuted }}>Loading…</Text>
-      </View>
-    );
+    return <LoadingView label="Loading…" fullScreen />;
   }
 
   return (
@@ -181,12 +191,15 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         <Text style={[styles.banner, msgError ? styles.bannerErr : styles.bannerOk]}>{msg}</Text>
       )}
 
-      <Text style={styles.label}>Title</Text>
-      <TextInput
-        style={styles.input}
+      <FormField
+        label="Title"
+        required
+        error={fieldErrors.title}
         value={title}
-        onChangeText={setTitle}
-        placeholderTextColor={colors.textMuted}
+        onChangeText={(t) => {
+          setTitle(t);
+          if (fieldErrors.title) setFieldErrors((fe) => ({ ...fe, title: '' }));
+        }}
         placeholder="Task title"
       />
 
@@ -208,7 +221,9 @@ export default function CreateTaskScreen({ navigation, route }: any) {
             style={[styles.chip, status === s && styles.chipOn]}
             onPress={() => setStatus(s)}
           >
-            <Text style={[styles.chipText, status === s && styles.chipTextOn]}>{statusLabel(s)}</Text>
+            <Text style={[styles.chipText, status === s && styles.chipTextOn]}>
+              {statusLabel(s)}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -309,75 +324,83 @@ export default function CreateTaskScreen({ navigation, route }: any) {
       </Text>
 
       <TouchableOpacity style={styles.save} onPress={save} disabled={busy}>
-        <Text style={styles.saveText}>
-          {busy ? 'Saving…' : editing ? 'Save changes' : 'Create & notify assignees'}
-        </Text>
+        {busy ? (
+          <ActivityIndicator color={colors.onAccent} />
+        ) : (
+          <Text style={styles.saveText}>
+            {editing ? 'Save changes' : 'Create & notify assignees'}
+          </Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  back: { color: colors.info, marginTop: Platform.OS === 'web' ? 12 : 48, marginBottom: 4 },
-  h1: { color: colors.text, fontSize: 26, fontWeight: '800', marginBottom: 12 },
-  banner: {
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    fontWeight: '600',
-  },
-  bannerOk: {
-    color: colors.accent,
-    backgroundColor: colors.bgCard,
-    borderColor: colors.border,
-  },
-  bannerErr: {
-    color: colors.danger,
-    backgroundColor: colors.bgCard,
-    borderColor: colors.danger,
-  },
-  label: { color: colors.textMuted, marginTop: 14, marginBottom: 8, fontWeight: '600' },
-  input: {
-    backgroundColor: colors.bgElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    color: colors.text,
-  },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.bgElevated,
-  },
-  chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipText: { color: colors.text, textTransform: 'capitalize', fontSize: 13 },
-  chipTextOn: { color: '#062016', fontWeight: '700' },
-  row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  addBtn: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  addBtnText: { color: colors.accent, fontWeight: '700' },
-  checkLine: { color: colors.text, marginTop: 6 },
-  hint: { color: colors.textMuted, fontSize: 12, marginTop: 8, lineHeight: 18 },
-  save: {
-    marginTop: 24,
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  saveText: { color: '#062016', fontWeight: '800', fontSize: 16 },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg },
+    back: { color: colors.info, marginTop: Platform.OS === 'web' ? 12 : 48, marginBottom: 4 },
+    h1: { color: colors.text, fontSize: 26, fontWeight: '800', marginBottom: 12 },
+    banner: {
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 12,
+      borderWidth: 1,
+      fontWeight: '600',
+    },
+    bannerOk: {
+      color: colors.accent,
+      backgroundColor: colors.bgCard,
+      borderColor: colors.border,
+    },
+    bannerErr: {
+      color: colors.danger,
+      backgroundColor: colors.errorBg,
+      borderColor: colors.danger,
+    },
+    label: { color: colors.textMuted, marginTop: 14, marginBottom: 8, fontWeight: '600' },
+    input: {
+      backgroundColor: colors.bgElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      color: colors.text,
+    },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: colors.bgElevated,
+    },
+    chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    chipText: { color: colors.text, textTransform: 'capitalize', fontSize: 13 },
+    chipTextOn: { color: colors.onAccent, fontWeight: '700' },
+    row: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+    addBtn: {
+      backgroundColor: colors.bgCard,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    addBtnText: { color: colors.accent, fontWeight: '700' },
+    checkLine: { color: colors.text, marginTop: 6 },
+    hint: { color: colors.textMuted, fontSize: 12, marginTop: 8, lineHeight: 18 },
+    save: {
+      marginTop: 24,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      minHeight: 50,
+      justifyContent: 'center',
+    },
+    saveText: { color: colors.onAccent, fontWeight: '800', fontSize: 16 },
+  });
+}

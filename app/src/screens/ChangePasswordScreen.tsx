@@ -1,40 +1,47 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
-  View,
   Text,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
-import { api } from '../api';
-import { colors } from '../theme';
+import { api, ApiError } from '../api';
+import { useTheme, ThemeColors } from '../theme';
 import PasswordField from '../components/PasswordField';
+import FormField from '../components/FormField';
 
 export default function ChangePasswordScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  function validate(): boolean {
+    const next: Record<string, string> = {};
+    if (!currentPassword) next.currentPassword = 'Current password is required';
+    if (!newPassword) next.newPassword = 'New password is required';
+    else if (newPassword.length < 6) next.newPassword = 'New password must be at least 6 characters';
+    if (!confirmPassword) next.confirmPassword = 'Please confirm your new password';
+    else if (newPassword && confirmPassword !== newPassword) {
+      next.confirmPassword = 'New passwords do not match';
+    }
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
+  }
 
   async function save() {
     setMsg('');
     setErr(false);
-    if (!currentPassword || !newPassword) {
+    if (!validate()) {
       setErr(true);
-      setMsg('Current and new password are required');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setErr(true);
-      setMsg('New password must be at least 6 characters');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setErr(true);
-      setMsg('New passwords do not match');
+      setMsg('Please fix the highlighted fields');
       return;
     }
     try {
@@ -43,8 +50,12 @@ export default function ChangePasswordScreen({ navigation }: any) {
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setFieldErrors({});
       setMsg(data.message || 'Password changed');
     } catch (e: any) {
+      if (e instanceof ApiError && e.fields) {
+        setFieldErrors(e.fields);
+      }
       setErr(true);
       setMsg(e.message || 'Failed to change password');
     } finally {
@@ -68,55 +79,76 @@ export default function ChangePasswordScreen({ navigation }: any) {
         <Text style={[styles.banner, err ? styles.bannerErr : styles.bannerOk]}>{msg}</Text>
       )}
 
-      <Text style={styles.label}>Current password</Text>
-      <PasswordField value={currentPassword} onChangeText={setCurrentPassword} placeholder="Current password" />
+      <FormField label="Current password" required error={fieldErrors.currentPassword}>
+        <PasswordField
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          placeholder="Current password"
+          error={Boolean(fieldErrors.currentPassword)}
+        />
+      </FormField>
 
-      <Text style={styles.label}>New password</Text>
-      <PasswordField value={newPassword} onChangeText={setNewPassword} placeholder="New password" />
+      <FormField label="New password" required error={fieldErrors.newPassword}>
+        <PasswordField
+          value={newPassword}
+          onChangeText={setNewPassword}
+          placeholder="New password"
+          error={Boolean(fieldErrors.newPassword)}
+        />
+      </FormField>
 
-      <Text style={styles.label}>Confirm new password</Text>
-      <PasswordField
-        value={confirmPassword}
-        onChangeText={setConfirmPassword}
-        placeholder="Confirm new password"
-      />
+      <FormField label="Confirm new password" required error={fieldErrors.confirmPassword}>
+        <PasswordField
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          placeholder="Confirm new password"
+          error={Boolean(fieldErrors.confirmPassword)}
+        />
+      </FormField>
 
       <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
-        <Text style={styles.btnText}>{busy ? 'Saving…' : 'Update password'}</Text>
+        {busy ? (
+          <ActivityIndicator color={colors.onAccent} />
+        ) : (
+          <Text style={styles.btnText}>Update password</Text>
+        )}
       </TouchableOpacity>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  back: { color: colors.info, marginTop: Platform.OS === 'web' ? 12 : 48, marginBottom: 8 },
-  h1: { color: colors.text, fontSize: 26, fontWeight: '800' },
-  sub: { color: colors.textMuted, marginTop: 8, marginBottom: 16 },
-  label: { color: colors.textMuted, marginTop: 14, marginBottom: 8, fontWeight: '600' },
-  banner: {
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    fontWeight: '600',
-  },
-  bannerOk: {
-    color: colors.accent,
-    backgroundColor: colors.bgCard,
-    borderColor: colors.border,
-  },
-  bannerErr: {
-    color: colors.danger,
-    backgroundColor: colors.bgCard,
-    borderColor: colors.danger,
-  },
-  btn: {
-    marginTop: 24,
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  btnText: { color: '#062016', fontWeight: '800', fontSize: 16 },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg },
+    back: { color: colors.info, marginTop: Platform.OS === 'web' ? 12 : 48, marginBottom: 8 },
+    h1: { color: colors.text, fontSize: 26, fontWeight: '800' },
+    sub: { color: colors.textMuted, marginTop: 8, marginBottom: 16 },
+    banner: {
+      borderRadius: 10,
+      padding: 12,
+      marginBottom: 12,
+      borderWidth: 1,
+      fontWeight: '600',
+    },
+    bannerOk: {
+      color: colors.accent,
+      backgroundColor: colors.bgCard,
+      borderColor: colors.border,
+    },
+    bannerErr: {
+      color: colors.danger,
+      backgroundColor: colors.errorBg,
+      borderColor: colors.danger,
+    },
+    btn: {
+      marginTop: 24,
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      minHeight: 50,
+      justifyContent: 'center',
+    },
+    btnText: { color: colors.onAccent, fontWeight: '800', fontSize: 16 },
+  });
+}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Platform,
 } from 'react-native';
 import { useAuth } from '../auth';
-import { colors } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
 type NavItem = {
   key: string;
@@ -38,6 +38,8 @@ export default function AppShell({
   title?: string;
 }) {
   const { user, logout, can } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const sidebarWide = width >= 900 || Platform.OS === 'web';
   const items = MENU.filter((m) => !m.perm || can(m.perm));
@@ -85,48 +87,51 @@ export default function AppShell({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg },
-  row: { flexDirection: 'row' },
-  col: { flexDirection: 'column' },
-  sidebar: {
-    width: 220,
-    backgroundColor: colors.bgElevated,
-    borderRightWidth: 1,
-    borderRightColor: colors.border,
-    paddingTop: Platform.OS === 'web' ? 20 : 48,
-    paddingHorizontal: 12,
-    paddingBottom: 16,
-  },
-  sidebarCompact: {
-    width: '100%',
-    borderRightWidth: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingTop: Platform.OS === 'web' ? 12 : 40,
-    maxHeight: 160,
-  },
-  brand: { color: colors.accent, fontSize: 20, fontWeight: '800', marginBottom: 8 },
-  userLine: { color: colors.text, fontSize: 13, marginBottom: 8, lineHeight: 18 },
-  roleLine: { color: colors.textMuted, fontSize: 12 },
-  navItem: {
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  navItemOn: { backgroundColor: colors.accentDim },
-  navText: { color: colors.textMuted, fontWeight: '600' },
-  navTextOn: { color: colors.text },
-  logout: { paddingVertical: 10, paddingHorizontal: 12 },
-  logoutText: { color: colors.danger, fontWeight: '700' },
-  content: { flex: 1, minWidth: 0 },
-  contentHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  contentTitle: { color: colors.text, fontSize: 22, fontWeight: '800' },
-  contentBody: { flex: 1 },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg },
+    row: { flexDirection: 'row' },
+    col: { flexDirection: 'column' },
+    sidebar: {
+      width: 232,
+      backgroundColor: colors.bgElevated,
+      borderRightWidth: 1,
+      borderRightColor: colors.border,
+      paddingTop: Platform.OS === 'web' ? 20 : 48,
+      paddingHorizontal: 12,
+      paddingBottom: 16,
+    },
+    sidebarCompact: {
+      width: '100%',
+      borderRightWidth: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      paddingTop: Platform.OS === 'web' ? 12 : 40,
+      maxHeight: 168,
+    },
+    brand: { color: colors.accent, fontSize: 22, fontWeight: '800', marginBottom: 8, letterSpacing: -0.4 },
+    userLine: { color: colors.text, fontSize: 13, marginBottom: 8, lineHeight: 18 },
+    roleLine: { color: colors.textMuted, fontSize: 12 },
+    navItem: {
+      borderRadius: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+    },
+    navItemOn: { backgroundColor: colors.accentDim },
+    navText: { color: colors.textMuted, fontWeight: '600' },
+    navTextOn: { color: colors.text, fontWeight: '800' },
+    logout: { paddingVertical: 10, paddingHorizontal: 12 },
+    logoutText: { color: colors.danger, fontWeight: '700' },
+    content: { flex: 1, minWidth: 0 },
+    contentHeader: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.bg,
+    },
+    contentTitle: { color: colors.text, fontSize: 22, fontWeight: '800', letterSpacing: -0.3 },
+    contentBody: { flex: 1 },
+  });
+}

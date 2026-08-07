@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import { api, getApiBaseUrl } from '../api';
-import { colors } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 import { useAuth } from '../auth';
 
 type ToneKind = 'notification' | 'alert' | 'reminder';
@@ -23,6 +23,8 @@ const TONES: { kind: ToneKind; title: string; desc: string }[] = [
 
 export default function SoundsScreen({ navigation }: any) {
   const { settings, setSettings, refreshMe } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [busyKind, setBusyKind] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -98,7 +100,8 @@ export default function SoundsScreen({ navigation }: any) {
       </TouchableOpacity>
       <Text style={styles.title}>Sounds & tones</Text>
       <Text style={styles.sub}>
-        Upload custom audio for notifications, alerts, and reminders. Files are stored locally on this device.
+        Upload custom audio for notifications, alerts, and reminders. Files are stored locally on
+        this device.
       </Text>
 
       {!!msg && <Text style={styles.msg}>{msg}</Text>}
@@ -135,47 +138,49 @@ export default function SoundsScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, padding: 16 },
-  back: { color: colors.info, marginTop: 48 },
-  title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 8 },
-  sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 12 },
-  msg: {
-    color: colors.accent,
-    backgroundColor: colors.bgCard,
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  card: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 8,
-    marginBottom: 12,
-  },
-  label: { color: colors.text, fontWeight: '800', fontSize: 16 },
-  desc: { color: colors.textMuted, fontSize: 13 },
-  value: { color: colors.text, marginVertical: 4 },
-  path: { color: colors.info, fontSize: 12, marginTop: 4 },
-  btn: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  btnText: { color: '#062016', fontWeight: '800' },
-  secondary: {
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  secondaryText: { color: colors.accent, fontWeight: '700' },
-  hint: { color: colors.textMuted, fontSize: 12, marginTop: 6 },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg, padding: 16 },
+    back: { color: colors.info, marginTop: 48 },
+    title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 8 },
+    sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 12 },
+    msg: {
+      color: colors.accent,
+      backgroundColor: colors.bgCard,
+      borderRadius: 10,
+      padding: 10,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    card: {
+      backgroundColor: colors.bgCard,
+      borderRadius: 14,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      gap: 8,
+      marginBottom: 12,
+    },
+    label: { color: colors.text, fontWeight: '800', fontSize: 16 },
+    desc: { color: colors.textMuted, fontSize: 13 },
+    value: { color: colors.text, marginVertical: 4 },
+    path: { color: colors.info, fontSize: 12, marginTop: 4 },
+    btn: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+    },
+    btnText: { color: colors.onAccent, fontWeight: '800' },
+    secondary: {
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    secondaryText: { color: colors.accent, fontWeight: '700' },
+    hint: { color: colors.textMuted, fontSize: 12, marginTop: 6 },
+  });
+}

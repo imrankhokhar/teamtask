@@ -1,6 +1,6 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet, Pressable } from 'react-native';
-import { colors } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
 type ConfirmOptions = {
   title?: string;
@@ -33,6 +33,9 @@ export function ConfirmModal({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable style={styles.backdrop} onPress={onCancel}>
@@ -47,7 +50,7 @@ export function ConfirmModal({
               style={[styles.confirmBtn, destructive ? styles.dangerBtn : styles.primaryBtn]}
               onPress={onConfirm}
             >
-              <Text style={[styles.confirmText, !destructive && styles.confirmTextPrimary]}>
+              <Text style={[styles.confirmText, !destructive && { color: colors.onAccent }]}>
                 {confirmLabel}
               </Text>
             </TouchableOpacity>
@@ -58,7 +61,6 @@ export function ConfirmModal({
   );
 }
 
-/** Promise-based confirm dialog — use instead of window.confirm / Alert.alert. */
 export function useConfirm() {
   const [pending, setPending] = useState<Pending | null>(null);
 
@@ -91,56 +93,57 @@ export function useConfirm() {
   return { confirm, dialog };
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  card: {
-    width: '100%',
-    maxWidth: 400,
-    backgroundColor: colors.bgCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 20,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  message: {
-    color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-  },
-  cancelBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.bgElevated,
-  },
-  cancelText: { color: colors.text, fontWeight: '700' },
-  confirmBtn: {
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  dangerBtn: { backgroundColor: colors.danger },
-  primaryBtn: { backgroundColor: colors.accent },
-  confirmText: { color: '#fff', fontWeight: '800' },
-  confirmTextPrimary: { color: '#062016' },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    card: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: colors.bgCard,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 20,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 18,
+      fontWeight: '800',
+      marginBottom: 8,
+    },
+    message: {
+      color: colors.textMuted,
+      fontSize: 15,
+      lineHeight: 22,
+      marginBottom: 20,
+    },
+    actions: {
+      flexDirection: 'row',
+      justifyContent: 'flex-end',
+      gap: 10,
+    },
+    cancelBtn: {
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bgElevated,
+    },
+    cancelText: { color: colors.text, fontWeight: '700' },
+    confirmBtn: {
+      borderRadius: 10,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+    },
+    dangerBtn: { backgroundColor: colors.danger },
+    primaryBtn: { backgroundColor: colors.accent },
+    confirmText: { color: '#fff', fontWeight: '800' },
+  });
+}

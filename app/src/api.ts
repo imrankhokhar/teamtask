@@ -54,6 +54,17 @@ type RequestOptions = {
   formData?: FormData;
 };
 
+export class ApiError extends Error {
+  fields?: Record<string, string>;
+  status?: number;
+  constructor(message: string, opts?: { fields?: Record<string, string>; status?: number }) {
+    super(message);
+    this.name = 'ApiError';
+    this.fields = opts?.fields;
+    this.status = opts?.status;
+  }
+}
+
 async function request<T = any>(path: string, opts: RequestOptions = {}): Promise<T> {
   const base = await getApiBaseUrl();
   API_URL = base;
@@ -77,7 +88,10 @@ async function request<T = any>(path: string, opts: RequestOptions = {}): Promis
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`);
+    throw new ApiError(data.error || `Request failed (${res.status})`, {
+      fields: data.fields,
+      status: res.status,
+    });
   }
   return data as T;
 }

@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { colors } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 import { useAuth } from '../auth';
 
 export default function AdminScreen({ navigation }: any) {
   const { user } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   if (user?.role !== 'admin') {
     return (
@@ -33,17 +35,19 @@ export default function AdminScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.bg, padding: 16 },
-  back: { color: colors.info, marginTop: 48 },
-  title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 12 },
-  sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 16 },
-  btn: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  btnText: { color: '#062016', fontWeight: '800' },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    root: { flex: 1, backgroundColor: colors.bg, padding: 16 },
+    back: { color: colors.info, marginTop: 48 },
+    title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 12 },
+    sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 16 },
+    btn: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginBottom: 10,
+    },
+    btnText: { color: colors.onAccent, fontWeight: '800' },
+  });
+}

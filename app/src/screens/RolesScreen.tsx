@@ -12,8 +12,9 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { colors } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 import AppShell from '../components/AppShell';
+import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
 
 function Field({
@@ -21,11 +22,15 @@ function Field({
   onChangeText,
   placeholder,
   editable = true,
+  colors,
+  styles,
 }: {
   value: string;
   onChangeText: (v: string) => void;
   placeholder: string;
   editable?: boolean;
+  colors: ThemeColors;
+  styles: ReturnType<typeof makeStyles>;
 }) {
   if (Platform.OS === 'web') {
     return (
@@ -66,6 +71,8 @@ function Field({
 
 export default function RolesScreen({ navigation }: any) {
   const { can } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { confirm, dialog } = useConfirm();
   const [roles, setRoles] = useState<any[]>([]);
   const [modules, setModules] = useState<any[]>([]);
@@ -78,6 +85,7 @@ export default function RolesScreen({ navigation }: any) {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [msg, setMsg] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const editingRole = useMemo(
     () => (editingId ? roles.find((r) => r.id === editingId) : null),
@@ -97,6 +105,7 @@ export default function RolesScreen({ navigation }: any) {
       setMsg(e.message || 'Failed to load roles');
     } finally {
       setRefreshing(false);
+      setLoaded(true);
     }
   }, []);
 
@@ -183,193 +192,213 @@ export default function RolesScreen({ navigation }: any) {
     }
   }
 
+  const showInitialLoad = (!loaded || refreshing) && roles.length === 0 && !showForm;
+
   return (
     <AppShell navigation={navigation} active="Roles" title="Roles & Permissions">
-      <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />}
-      >
-        {!!msg && <Text style={styles.msg}>{msg}</Text>}
-        {can('roles.create') && !showForm ? (
-          <TouchableOpacity style={styles.btn} onPress={startCreate}>
-            <Text style={styles.btnText}>+ Create role</Text>
-          </TouchableOpacity>
-        ) : null}
+      {showInitialLoad ? (
+        <LoadingView label="Loading roles…" />
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
+          }
+        >
+          {!!msg && <Text style={styles.msg}>{msg}</Text>}
+          {can('roles.create') && !showForm ? (
+            <TouchableOpacity style={styles.btn} onPress={startCreate}>
+              <Text style={styles.btnText}>+ Create role</Text>
+            </TouchableOpacity>
+          ) : null}
 
-        {showForm ? (
-          <View style={styles.form} pointerEvents="box-none">
-            <Text style={styles.formTitle}>{editingId ? 'Edit role' : 'New role'}</Text>
-            <Field
-              value={name}
-              onChangeText={setName}
-              placeholder="Role name"
-              editable={!nameLocked}
-            />
-            {nameLocked ? (
-              <Text style={styles.hint}>System role names cannot be changed.</Text>
-            ) : null}
-            <Field
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Description"
-            />
-            <Text style={styles.label}>Permissions</Text>
-            {modules.map((mod) => (
-              <View key={mod.key} style={styles.moduleBlock}>
-                <Text style={styles.moduleTitle}>{mod.label}</Text>
-                <View style={styles.chips}>
-                  {actions.map((act) => {
-                    const key = `${mod.key}.${act.key}`;
-                    if (!catalog.includes(key) && key !== 'teams.view_all') return null;
-                    const on = permissions.includes(key);
-                    return (
+          {showForm ? (
+            <View style={styles.form} pointerEvents="box-none">
+              <Text style={styles.formTitle}>{editingId ? 'Edit role' : 'New role'}</Text>
+              <Field
+                value={name}
+                onChangeText={setName}
+                placeholder="Role name"
+                editable={!nameLocked}
+                colors={colors}
+                styles={styles}
+              />
+              {nameLocked ? (
+                <Text style={styles.hint}>System role names cannot be changed.</Text>
+              ) : null}
+              <Field
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Description"
+                colors={colors}
+                styles={styles}
+              />
+              <Text style={styles.label}>Permissions</Text>
+              {modules.map((mod) => (
+                <View key={mod.key} style={styles.moduleBlock}>
+                  <Text style={styles.moduleTitle}>{mod.label}</Text>
+                  <View style={styles.chips}>
+                    {actions.map((act) => {
+                      const key = `${mod.key}.${act.key}`;
+                      if (!catalog.includes(key) && key !== 'teams.view_all') return null;
+                      const on = permissions.includes(key);
+                      return (
+                        <TouchableOpacity
+                          key={key}
+                          style={[styles.chip, on && styles.chipOn]}
+                          onPress={() => togglePerm(key)}
+                        >
+                          <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                            {act.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                    {mod.key === 'teams' ? (
                       <TouchableOpacity
-                        key={key}
-                        style={[styles.chip, on && styles.chipOn]}
-                        onPress={() => togglePerm(key)}
-                      >
-                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{act.label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {mod.key === 'teams' ? (
-                    <TouchableOpacity
-                      style={[styles.chip, permissions.includes('teams.view_all') && styles.chipOn]}
-                      onPress={() => togglePerm('teams.view_all')}
-                    >
-                      <Text
                         style={[
-                          styles.chipText,
-                          permissions.includes('teams.view_all') && styles.chipTextOn,
+                          styles.chip,
+                          permissions.includes('teams.view_all') && styles.chipOn,
                         ]}
+                        onPress={() => togglePerm('teams.view_all')}
                       >
-                        View all teams
-                      </Text>
+                        <Text
+                          style={[
+                            styles.chipText,
+                            permissions.includes('teams.view_all') && styles.chipTextOn,
+                          ]}
+                        >
+                          View all teams
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+              <TouchableOpacity style={styles.btn} onPress={save}>
+                <Text style={styles.btnText}>{editingId ? 'Save role' : 'Create role'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondary} onPress={resetForm}>
+                <Text style={styles.secondaryText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          <View style={{ gap: 10, marginTop: 8 }}>
+            {roles.map((item) => (
+              <View key={item.id} style={styles.card}>
+                <Text style={styles.cardTitle}>
+                  {item.name}
+                  {item.isSystem ? ' (system)' : ''}
+                </Text>
+                <Text style={styles.meta}>{item.description || '—'}</Text>
+                <Text style={styles.meta}>{(item.permissions || []).length} permissions</Text>
+                <View style={styles.actions}>
+                  {can('roles.edit') ? (
+                    <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
+                      <Text style={styles.miniText}>Edit</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {can('roles.delete') && !item.isSystem ? (
+                    <TouchableOpacity
+                      style={[styles.mini, styles.danger]}
+                      onPress={() => removeRole(item)}
+                    >
+                      <Text style={styles.miniText}>Delete</Text>
                     </TouchableOpacity>
                   ) : null}
                 </View>
               </View>
             ))}
-            <TouchableOpacity style={styles.btn} onPress={save}>
-              <Text style={styles.btnText}>{editingId ? 'Save role' : 'Create role'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondary} onPress={resetForm}>
-              <Text style={styles.secondaryText}>Cancel</Text>
-            </TouchableOpacity>
           </View>
-        ) : null}
-
-        <View style={{ gap: 10, marginTop: 8 }}>
-          {roles.map((item) => (
-            <View key={item.id} style={styles.card}>
-              <Text style={styles.cardTitle}>
-                {item.name}
-                {item.isSystem ? ' (system)' : ''}
-              </Text>
-              <Text style={styles.meta}>{item.description || '—'}</Text>
-              <Text style={styles.meta}>
-                {(item.permissions || []).length} permissions
-              </Text>
-              <View style={styles.actions}>
-                {can('roles.edit') ? (
-                  <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
-                    <Text style={styles.miniText}>Edit</Text>
-                  </TouchableOpacity>
-                ) : null}
-                {can('roles.delete') && !item.isSystem ? (
-                  <TouchableOpacity style={[styles.mini, styles.danger]} onPress={() => removeRole(item)}>
-                    <Text style={styles.miniText}>Delete</Text>
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            </View>
-          ))}
-        </View>
-      </ScrollView>
+        </ScrollView>
+      )}
       {dialog}
     </AppShell>
   );
 }
 
-const styles = StyleSheet.create({
-  msg: {
-    color: colors.accent,
-    backgroundColor: colors.bgCard,
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  btn: {
-    backgroundColor: colors.accent,
-    borderRadius: 12,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  btnText: { color: '#062016', fontWeight: '800' },
-  secondary: {
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  secondaryText: { color: colors.accent, fontWeight: '700' },
-  form: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 12,
-  },
-  formTitle: { color: colors.text, fontWeight: '700', marginBottom: 10, fontSize: 16 },
-  label: { color: colors.textMuted, marginBottom: 8, marginTop: 4, fontWeight: '600' },
-  input: {
-    backgroundColor: colors.bgElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    color: colors.text,
-    marginBottom: 8,
-  },
-  inputDisabled: { opacity: 0.6 },
-  hint: { color: colors.textMuted, fontSize: 12, marginBottom: 8, marginTop: -4 },
-  moduleBlock: { marginBottom: 12 },
-  moduleTitle: { color: colors.text, fontWeight: '700', marginBottom: 6 },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: colors.bgElevated,
-  },
-  chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  chipText: { color: colors.text, fontSize: 12 },
-  chipTextOn: { color: '#062016', fontWeight: '700' },
-  card: {
-    backgroundColor: colors.bgCard,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
-  meta: { color: colors.textMuted, marginTop: 4 },
-  actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  mini: {
-    backgroundColor: colors.accentDim,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  danger: { backgroundColor: colors.danger },
-  miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-});
+function makeStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    msg: {
+      color: colors.accent,
+      backgroundColor: colors.bgCard,
+      borderRadius: 10,
+      padding: 10,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    btn: {
+      backgroundColor: colors.accent,
+      borderRadius: 12,
+      paddingVertical: 12,
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    btnText: { color: colors.onAccent, fontWeight: '800' },
+    secondary: {
+      borderRadius: 12,
+      paddingVertical: 10,
+      alignItems: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    secondaryText: { color: colors.accent, fontWeight: '700' },
+    form: {
+      backgroundColor: colors.bgCard,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginBottom: 12,
+    },
+    formTitle: { color: colors.text, fontWeight: '700', marginBottom: 10, fontSize: 16 },
+    label: { color: colors.textMuted, marginBottom: 8, marginTop: 4, fontWeight: '600' },
+    input: {
+      backgroundColor: colors.bgElevated,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      color: colors.text,
+      marginBottom: 8,
+    },
+    inputDisabled: { opacity: 0.6 },
+    hint: { color: colors.textMuted, fontSize: 12, marginBottom: 8, marginTop: -4 },
+    moduleBlock: { marginBottom: 12 },
+    moduleTitle: { color: colors.text, fontWeight: '700', marginBottom: 6 },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    chip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      backgroundColor: colors.bgElevated,
+    },
+    chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    chipText: { color: colors.text, fontSize: 12 },
+    chipTextOn: { color: colors.onAccent, fontWeight: '700' },
+    card: {
+      backgroundColor: colors.bgCard,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
+    meta: { color: colors.textMuted, marginTop: 4 },
+    actions: { flexDirection: 'row', gap: 8, marginTop: 10 },
+    mini: {
+      backgroundColor: colors.accentDim,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+    },
+    danger: { backgroundColor: colors.danger },
+    miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
+  });
+}
