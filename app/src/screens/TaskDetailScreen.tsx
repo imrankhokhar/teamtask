@@ -203,15 +203,6 @@ export default function TaskDetailScreen({ route, navigation }: any) {
 
         <View style={styles.titleRow}>
           <Text style={[styles.title, { flex: 1 }]}>{task.title}</Text>
-          {can('tasks.edit') ? (
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => navigation.navigate('CreateTask', { taskId: id })}
-            >
-              <Ionicons name="create-outline" size={14} color={colors.accent} />
-              <Text style={styles.editBtnText}>Edit</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
         <Text style={styles.desc}>{task.description || 'No description'}</Text>
 

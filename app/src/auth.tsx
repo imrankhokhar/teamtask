@@ -24,6 +24,9 @@ export type AppSettings = {
   alertToneName?: string | null;
   reminderToneUrl?: string | null;
   reminderToneName?: string | null;
+  appName?: string;
+  logoUrl?: string | null;
+  tagline?: string;
 };
 
 const emptySettings: AppSettings = {
@@ -35,6 +38,9 @@ const emptySettings: AppSettings = {
   alertToneName: null,
   reminderToneUrl: null,
   reminderToneName: null,
+  appName: 'TeamTask',
+  logoUrl: null,
+  tagline: 'Plan work. Share progress. Stay aligned.',
 };
 
 type AuthCtx = {

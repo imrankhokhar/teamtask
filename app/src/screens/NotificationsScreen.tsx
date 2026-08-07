@@ -13,7 +13,6 @@ import { api } from '../api';
 import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
-import InfoBanner from '../components/InfoBanner';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDateTime } from '../format';
 
@@ -54,7 +53,6 @@ export default function NotificationsScreen({ navigation }: any) {
     <AppShell navigation={navigation} active="Notifications" title="Notifications">
       <View style={styles.root}>
         <View style={styles.header}>
-          <InfoBanner>Only tasks you are assigned to (or report) appear here.</InfoBanner>
           <TouchableOpacity style={styles.markAll} onPress={markAll}>
             <Ionicons name="checkmark-done-outline" size={16} color={colors.accent} />
             <Text style={styles.link}>Mark all read</Text>

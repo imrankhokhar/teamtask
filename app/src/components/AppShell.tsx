@@ -15,6 +15,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../auth';
 import { useTheme, ThemeColors } from '../theme';
 import { getApiBaseUrlSyncFallback } from '../api';
+import InfoTip from './InfoTip';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -71,7 +72,17 @@ const MENU: NavItem[] = [
   },
 ];
 
-function avatarUrl(path?: string | null) {
+const MODULE_INFO: Record<string, string> = {
+  Tasks: 'Create and track work. Open a card for details, or use Edit on the card to change it.',
+  Teams:
+    'Non-admins only see teams they belong to. Admins (or roles with “view all teams”) see every team.',
+  Users: 'Create accounts, assign roles, and manage who can access this hub.',
+  Roles: 'Define what each role can view and change across modules.',
+  Notifications: 'Only tasks you are assigned to (or report) appear here.',
+  Settings: 'Theme, password, sounds, email, branding, and connection options.',
+};
+
+function resolveUrl(path?: string | null) {
   if (!path) return null;
   if (path.startsWith('http')) return path;
   return `${getApiBaseUrlSyncFallback()}${path}`;
@@ -89,20 +100,25 @@ export default function AppShell({
   active,
   children,
   title,
+  info,
 }: {
   navigation: any;
   active: string;
   children: React.ReactNode;
   title?: string;
+  info?: string;
 }) {
-  const { user, logout, can } = useAuth();
+  const { user, logout, can, settings } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { width } = useWindowDimensions();
   const sidebarWide = width >= 900 || Platform.OS === 'web';
   const items = MENU.filter((m) => !m.perm || can(m.perm));
   const [menuOpen, setMenuOpen] = useState(false);
-  const photo = avatarUrl(user?.avatarUrl);
+  const photo = resolveUrl(user?.avatarUrl);
+  const logo = resolveUrl(settings?.logoUrl);
+  const appName = settings?.appName || 'TeamTask';
+  const tip = info || MODULE_INFO[active] || '';
 
   function go(screen: string) {
     setMenuOpen(false);
@@ -112,14 +128,22 @@ export default function AppShell({
   const sidebar = (
     <View style={[styles.sidebar, !sidebarWide && styles.sidebarCompact]}>
       <View style={styles.brandRow}>
-        <Ionicons name="layers" size={20} color={colors.accent} />
-        <Text style={styles.brand}>TeamTask</Text>
+        {logo ? (
+          <Image source={{ uri: logo }} style={styles.brandLogo} resizeMode="contain" />
+        ) : (
+          <Ionicons name="layers" size={20} color={colors.accent} />
+        )}
+        <Text style={styles.brand} numberOfLines={1}>
+          {appName}
+        </Text>
       </View>
       <ScrollView
         style={{ flex: sidebarWide ? 1 : undefined }}
         horizontal={!sidebarWide}
         contentContainerStyle={
-          sidebarWide ? { gap: 2, paddingVertical: 8 } : { gap: 6, paddingVertical: 4, flexDirection: 'row' }
+          sidebarWide
+            ? { gap: 2, paddingVertical: 8 }
+            : { gap: 6, paddingVertical: 4, flexDirection: 'row' }
         }
         showsHorizontalScrollIndicator={false}
       >
@@ -152,9 +176,12 @@ export default function AppShell({
       {sidebar}
       <View style={styles.content}>
         <View style={styles.contentHeader}>
-          <Text style={styles.contentTitle} numberOfLines={1}>
-            {title || active}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.contentTitle} numberOfLines={1}>
+              {title || active}
+            </Text>
+            {tip ? <InfoTip text={tip} /> : null}
+          </View>
           <TouchableOpacity
             style={styles.userChip}
             onPress={() => setMenuOpen(true)}
@@ -241,11 +268,13 @@ function makeStyles(colors: ThemeColors) {
       marginBottom: 6,
       paddingHorizontal: 4,
     },
+    brandLogo: { width: 28, height: 28, borderRadius: 6 },
     brand: {
       color: colors.accent,
       fontSize: 18,
       fontWeight: '800',
       letterSpacing: -0.3,
+      flex: 1,
     },
     navItem: {
       borderRadius: 8,
@@ -277,13 +306,21 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+      zIndex: 10,
+    },
+    titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flex: 1,
+      minWidth: 0,
     },
     contentTitle: {
       color: colors.text,
       fontSize: 18,
       fontWeight: '800',
       letterSpacing: -0.2,
-      flex: 1,
+      flexShrink: 1,
     },
     userChip: {
       flexDirection: 'row',

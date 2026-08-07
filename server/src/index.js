@@ -1390,8 +1390,83 @@ function normalizeSettings(s = {}) {
     alertToneName: s.alertToneName || s.ringtoneName || null,
     reminderToneUrl: s.reminderToneUrl || s.ringtoneUrl || null,
     reminderToneName: s.reminderToneName || s.ringtoneName || null,
+    appName: String(s.appName || 'TeamTask').trim() || 'TeamTask',
+    logoUrl: s.logoUrl || null,
+    tagline:
+      String(s.tagline || 'Plan work. Share progress. Stay aligned.').trim() ||
+      'Plan work. Share progress. Stay aligned.',
   };
 }
+
+/** Public branding for login / unauthenticated screens */
+app.get('/api/branding', (_req, res) => {
+  const s = normalizeSettings(readDb().settings);
+  res.json({
+    appName: s.appName,
+    logoUrl: s.logoUrl,
+    tagline: s.tagline,
+  });
+});
+
+app.patch('/api/settings/branding', authRequired, requirePerm('settings.edit'), (req, res) => {
+  const { appName, tagline } = req.body || {};
+  const fields = {};
+  if (appName != null && !String(appName).trim()) fields.appName = 'App name is required';
+  if (Object.keys(fields).length) {
+    return res.status(400).json({ error: 'Please fix the highlighted fields', fields });
+  }
+  updateDb((db) => {
+    db.settings = normalizeSettings(db.settings);
+    if (appName != null) db.settings.appName = String(appName).trim() || 'TeamTask';
+    if (tagline != null) {
+      db.settings.tagline =
+        String(tagline).trim() || 'Plan work. Share progress. Stay aligned.';
+    }
+  });
+  res.json({ settings: normalizeSettings(readDb().settings) });
+});
+
+const logoUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOADS,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '') || '.png';
+      cb(null, `logo-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok =
+      /^image\//i.test(file.mimetype || '') ||
+      /\.(png|jpe?g|gif|webp|svg)$/i.test(file.originalname || '');
+    if (!ok) return cb(new Error('Image files only'));
+    cb(null, true);
+  },
+});
+
+app.post(
+  '/api/settings/logo',
+  authRequired,
+  requirePerm('settings.edit'),
+  logoUpload.single('logo'),
+  (req, res) => {
+    if (!req.file) return res.status(400).json({ error: 'Logo image required' });
+    const url = `/uploads/${req.file.filename}`;
+    updateDb((db) => {
+      db.settings = normalizeSettings(db.settings);
+      if (db.settings.logoUrl) {
+        const old = path.join(UPLOADS, path.basename(db.settings.logoUrl));
+        try {
+          if (fs.existsSync(old)) fs.unlinkSync(old);
+        } catch {
+          // ignore
+        }
+      }
+      db.settings.logoUrl = url;
+    });
+    res.json({ settings: normalizeSettings(readDb().settings), logoUrl: url });
+  }
+);
 
 app.get('/api/settings', authRequired, requirePerm('settings.view'), (req, res) => {
   const db = readDb();

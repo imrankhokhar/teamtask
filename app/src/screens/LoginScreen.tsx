@@ -1,8 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -10,9 +9,10 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useAuth } from '../auth';
-import { api, ApiError } from '../api';
+import { api, ApiError, getApiBaseUrlSyncFallback, refreshApiUrl } from '../api';
 import { useTheme, ThemeColors, spacing } from '../theme';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
@@ -24,6 +24,12 @@ function showError(message: string, setError: (m: string) => void) {
   if (Platform.OS !== 'web') {
     Alert.alert('Error', message);
   }
+}
+
+function resolveUrl(path?: string | null) {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  return `${getApiBaseUrlSyncFallback()}${path}`;
 }
 
 export default function LoginScreen({ navigation }: any) {
@@ -42,6 +48,27 @@ export default function LoginScreen({ navigation }: any) {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [appName, setAppName] = useState('TeamTask');
+  const [tagline, setTagline] = useState('Plan work. Share progress. Stay aligned.');
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        await refreshApiUrl();
+      } catch {
+        // ignore
+      }
+      try {
+        const data = await api.branding();
+        if (data.appName) setAppName(data.appName);
+        if (data.tagline) setTagline(data.tagline);
+        if (data.logoUrl) setLogoUrl(resolveUrl(data.logoUrl));
+      } catch {
+        // keep defaults when server unreachable
+      }
+    })();
+  }, []);
 
   function switchMode(next: Mode) {
     setMode(next);
@@ -146,121 +173,138 @@ export default function LoginScreen({ navigation }: any) {
             ? 'Send reset code'
             : 'Set new password';
 
+  const heading =
+    mode === 'forgot'
+      ? 'Reset your password'
+      : mode === 'reset'
+        ? 'Enter code and new password'
+        : tagline;
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-        <Text style={styles.brand}>TeamTask</Text>
-        <Text style={styles.sub}>
-          {mode === 'forgot'
-            ? 'Reset your password'
-            : mode === 'reset'
-              ? 'Enter code and new password'
-              : 'Plan work. Share progress. Stay aligned.'}
-        </Text>
+      <ScrollView
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.card}>
+          <View style={styles.brandBlock}>
+            {logoUrl ? (
+              <Image source={{ uri: logoUrl }} style={styles.logo} resizeMode="contain" />
+            ) : (
+              <View style={styles.logoFallback}>
+                <Text style={styles.logoFallbackText}>
+                  {appName.slice(0, 1).toUpperCase()}
+                </Text>
+              </View>
+            )}
+            <Text style={styles.brand}>{appName}</Text>
+            <Text style={styles.sub}>{heading}</Text>
+          </View>
 
-        {!!error && <Text style={styles.error}>{error}</Text>}
-        {!!info && <Text style={styles.info}>{info}</Text>}
+          {!!error && <Text style={styles.error}>{error}</Text>}
+          {!!info && <Text style={styles.info}>{info}</Text>}
 
-        {mode === 'register' && (
-          <FormField
-            label="Full name"
-            required
-            error={fieldErrors.name}
-            value={name}
-            onChangeText={setName}
-            placeholder="Your name"
-          />
-        )}
-
-        <FormField
-          label="Email"
-          required
-          error={fieldErrors.email}
-          value={email}
-          onChangeText={setEmail}
-          placeholder="you@company.com"
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-
-        {(mode === 'login' || mode === 'register') && (
-          <FormField label="Password" required error={fieldErrors.password}>
-            <PasswordField
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              error={Boolean(fieldErrors.password)}
-            />
-          </FormField>
-        )}
-
-        {mode === 'reset' && (
-          <>
+          {mode === 'register' && (
             <FormField
-              label="Reset code"
+              label="Full name"
               required
-              error={fieldErrors.code}
-              value={code}
-              onChangeText={setCode}
-              placeholder="6-digit code"
-              autoCapitalize="none"
-              keyboardType="number-pad"
+              error={fieldErrors.name}
+              value={name}
+              onChangeText={setName}
+              placeholder="Your name"
             />
-            <FormField label="New password" required error={fieldErrors.newPassword}>
-              <PasswordField
-                placeholder="New password"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                error={Boolean(fieldErrors.newPassword)}
-              />
-            </FormField>
-            <FormField label="Confirm password" required error={fieldErrors.confirmPassword}>
-              <PasswordField
-                placeholder="Confirm new password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                error={Boolean(fieldErrors.confirmPassword)}
-              />
-            </FormField>
-          </>
-        )}
-
-        <TouchableOpacity style={styles.btn} onPress={submit} disabled={busy}>
-          {busy ? (
-            <ActivityIndicator color={colors.onAccent} />
-          ) : (
-            <Text style={styles.btnText}>{primaryLabel}</Text>
           )}
-        </TouchableOpacity>
 
-        {mode === 'login' && (
-          <TouchableOpacity onPress={() => switchMode('forgot')}>
-            <Text style={styles.switch}>Forgot password?</Text>
+          <FormField
+            label="Email"
+            required
+            error={fieldErrors.email}
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@company.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          {(mode === 'login' || mode === 'register') && (
+            <FormField label="Password" required error={fieldErrors.password}>
+              <PasswordField
+                placeholder="Password"
+                value={password}
+                onChangeText={setPassword}
+                error={Boolean(fieldErrors.password)}
+              />
+            </FormField>
+          )}
+
+          {mode === 'reset' && (
+            <>
+              <FormField
+                label="Reset code"
+                required
+                error={fieldErrors.code}
+                value={code}
+                onChangeText={setCode}
+                placeholder="6-digit code"
+                autoCapitalize="none"
+                keyboardType="number-pad"
+              />
+              <FormField label="New password" required error={fieldErrors.newPassword}>
+                <PasswordField
+                  placeholder="New password"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  error={Boolean(fieldErrors.newPassword)}
+                />
+              </FormField>
+              <FormField label="Confirm password" required error={fieldErrors.confirmPassword}>
+                <PasswordField
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  error={Boolean(fieldErrors.confirmPassword)}
+                />
+              </FormField>
+            </>
+          )}
+
+          <TouchableOpacity style={styles.btn} onPress={submit} disabled={busy}>
+            {busy ? (
+              <ActivityIndicator color={colors.onAccent} />
+            ) : (
+              <Text style={styles.btnText}>{primaryLabel}</Text>
+            )}
           </TouchableOpacity>
-        )}
 
-        {(mode === 'forgot' || mode === 'reset') && (
-          <TouchableOpacity onPress={() => switchMode('login')}>
-            <Text style={styles.switch}>Back to sign in</Text>
+          {mode === 'login' && (
+            <TouchableOpacity onPress={() => switchMode('forgot')}>
+              <Text style={styles.switch}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+
+          {(mode === 'forgot' || mode === 'reset') && (
+            <TouchableOpacity onPress={() => switchMode('login')}>
+              <Text style={styles.switch}>Back to sign in</Text>
+            </TouchableOpacity>
+          )}
+
+          {(mode === 'login' || mode === 'register') && (
+            <TouchableOpacity
+              onPress={() => switchMode(mode === 'login' ? 'register' : 'login')}
+            >
+              <Text style={styles.switch}>
+                {mode === 'login' ? 'Need an account? Register' : 'Have an account? Sign in'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity onPress={() => navigation.navigate('Connection')}>
+            <Text style={styles.switch}>Server connection (phone setup)</Text>
           </TouchableOpacity>
-        )}
-
-        {(mode === 'login' || mode === 'register') && (
-          <TouchableOpacity
-            onPress={() => switchMode(mode === 'login' ? 'register' : 'login')}
-          >
-            <Text style={styles.switch}>
-              {mode === 'login' ? 'Need an account? Register' : 'Have an account? Sign in'}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity onPress={() => navigation.navigate('Connection')}>
-          <Text style={styles.switch}>Server connection (phone setup)</Text>
-        </TouchableOpacity>
+        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -269,22 +313,56 @@ export default function LoginScreen({ navigation }: any) {
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
-    inner: { flexGrow: 1, justifyContent: 'center', padding: 24, gap: 12 },
+    inner: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 24,
+    },
+    card: {
+      width: '100%',
+      maxWidth: 400,
+      backgroundColor: colors.bgCard,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 24,
+      gap: 10,
+    },
+    brandBlock: { alignItems: 'center', marginBottom: 8, gap: 8 },
+    logo: { width: 72, height: 72, borderRadius: 16 },
+    logoFallback: {
+      width: 72,
+      height: 72,
+      borderRadius: 16,
+      backgroundColor: colors.accentDim,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    logoFallbackText: { color: colors.accent, fontSize: 28, fontWeight: '800' },
     brand: {
-      fontSize: 40,
+      fontSize: 28,
       fontWeight: '800',
       color: colors.accent,
-      letterSpacing: -1,
+      letterSpacing: -0.6,
+      textAlign: 'center',
     },
-    sub: { color: colors.textMuted, marginBottom: 12, fontSize: 15, lineHeight: 22 },
+    sub: {
+      color: colors.textMuted,
+      fontSize: 14,
+      lineHeight: 20,
+      textAlign: 'center',
+    },
     error: {
       color: colors.danger,
       backgroundColor: colors.errorBg,
       borderWidth: 1,
       borderColor: colors.danger,
       borderRadius: 10,
-      padding: 12,
-      marginBottom: 4,
+      padding: 10,
+      fontSize: 13,
     },
     info: {
       color: colors.accent,
@@ -292,20 +370,20 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 10,
-      padding: 12,
-      marginBottom: 4,
-      lineHeight: 20,
+      padding: 10,
+      lineHeight: 18,
+      fontSize: 13,
     },
     btn: {
       backgroundColor: colors.accent,
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
       alignItems: 'center',
-      marginTop: 8,
+      marginTop: 6,
       minHeight: 38,
       justifyContent: 'center',
     },
     btnText: { color: colors.onAccent, fontWeight: '700', fontSize: spacing.btnFont },
-    switch: { color: colors.info, textAlign: 'center', marginTop: 8 },
+    switch: { color: colors.info, textAlign: 'center', marginTop: 4, fontSize: 13 },
   });
 }

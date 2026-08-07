@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import { useAuth } from '../auth';
 
 export default function AdminScreen({ navigation }: any) {
@@ -43,11 +43,15 @@ function makeStyles(colors: ThemeColors) {
     sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 16 },
     btn: {
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
       marginBottom: 10,
+      alignSelf: 'flex-start',
+      minHeight: 38,
+      justifyContent: 'center',
     },
-    btnText: { color: colors.onAccent, fontWeight: '800' },
+    btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
   });
 }

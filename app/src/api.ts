@@ -69,7 +69,8 @@ async function request<T = any>(path: string, opts: RequestOptions = {}): Promis
   const base = await getApiBaseUrl();
   API_URL = base;
   const headers: Record<string, string> = {};
-  const token = opts.token ?? (await AsyncStorage.getItem('token'));
+  const token =
+    opts.token === null ? null : opts.token !== undefined ? opts.token : await AsyncStorage.getItem('token');
   if (token) headers.Authorization = `Bearer ${token}`;
 
   let body: BodyInit | undefined;
@@ -190,6 +191,22 @@ export const api = {
   readAllNotifications: () =>
     request('/api/notifications/read-all', { method: 'POST' }),
   settings: () => request('/api/settings'),
+  branding: () => request('/api/branding', { token: null }),
+  updateBranding: (body: { appName?: string; tagline?: string }) =>
+    request('/api/settings/branding', { method: 'PATCH', body }),
+  uploadLogo: async (uri: string, name: string, mimeType?: string, fileObj?: any) => {
+    const form = new FormData();
+    if (fileObj) {
+      form.append('logo', fileObj);
+    } else {
+      form.append('logo', {
+        uri,
+        name: name || 'logo.png',
+        type: mimeType || 'image/png',
+      } as any);
+    }
+    return request('/api/settings/logo', { method: 'POST', formData: form });
+  },
   storageInfo: () => request('/api/storage-info'),
   lanInfo: () => request('/api/lan-info'),
   uploadTone: async (kind: string, uri: string, name: string, mimeType?: string, fileObj?: any) => {

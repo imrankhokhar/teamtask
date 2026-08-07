@@ -17,7 +17,6 @@ import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
-import InfoBanner from '../components/InfoBanner';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TeamsScreen({ navigation }: any) {
@@ -143,10 +142,6 @@ export default function TeamsScreen({ navigation }: any) {
       ) : (
         <View style={styles.root}>
           <View style={styles.toolbar}>
-            <InfoBanner>
-              Non-admins only see teams they belong to. Admins (or roles with “view all teams”) see
-              every team.
-            </InfoBanner>
             {!!msg && <Text style={styles.msg}>{msg}</Text>}
             {can('teams.create') && !showForm ? (
               <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>

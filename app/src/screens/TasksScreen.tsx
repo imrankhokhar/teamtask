@@ -89,30 +89,44 @@ export default function TasksScreen({ navigation }: any) {
                   {(item.checklist || []).length} checklist · {(item.assignees || []).length} people ·{' '}
                   {(item.teams || []).length} teams
                 </Text>
-                {can('tasks.delete') && (
-                  <TouchableOpacity
-                    style={styles.deleteLinkWrap}
-                    onPress={async (e) => {
-                      e?.stopPropagation?.();
-                      const ok = await confirm({
-                        title: 'Delete task',
-                        message: `Delete task "${item.title}"? This cannot be undone.`,
-                        confirmLabel: 'Delete',
-                      });
-                      if (!ok) return;
-                      try {
-                        await api.deleteTask(item.id);
-                        await load();
-                      } catch (err: any) {
-                        Alert.alert('Error', err.message);
-                      }
-                    }}
-                  >
-                  <View style={styles.deleteLinkRow}>
-                    <Ionicons name="trash-outline" size={13} color={colors.danger} />
-                    <Text style={styles.deleteLink}>Delete</Text>
+                {(can('tasks.edit') || can('tasks.delete')) && (
+                  <View style={styles.actions}>
+                    {can('tasks.edit') ? (
+                      <TouchableOpacity
+                        style={styles.mini}
+                        onPress={(e) => {
+                          e?.stopPropagation?.();
+                          navigation.navigate('CreateTask', { taskId: item.id });
+                        }}
+                      >
+                        <Ionicons name="create-outline" size={14} color={colors.accent} />
+                        <Text style={styles.miniText}>Edit</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                    {can('tasks.delete') ? (
+                      <TouchableOpacity
+                        style={[styles.mini, styles.danger]}
+                        onPress={async (e) => {
+                          e?.stopPropagation?.();
+                          const ok = await confirm({
+                            title: 'Delete task',
+                            message: `Delete task "${item.title}"? This cannot be undone.`,
+                            confirmLabel: 'Delete',
+                          });
+                          if (!ok) return;
+                          try {
+                            await api.deleteTask(item.id);
+                            await load();
+                          } catch (err: any) {
+                            Alert.alert('Error', err.message);
+                          }
+                        }}
+                      >
+                        <Ionicons name="trash-outline" size={14} color="#fff" />
+                        <Text style={styles.dangerText}>Delete</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
-                  </TouchableOpacity>
                 )}
               </TouchableOpacity>
             )}
@@ -190,8 +204,18 @@ function makeStyles(colors: ThemeColors) {
     },
     fabInner: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     fabText: { color: colors.onAccent, fontWeight: '800' },
-    deleteLinkWrap: { marginTop: 10, alignSelf: 'flex-start' },
-    deleteLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    deleteLink: { color: colors.danger, fontWeight: '700', fontSize: 12 },
+    actions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
+    mini: {
+      backgroundColor: colors.accentDim,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    danger: { backgroundColor: colors.danger },
+    miniText: { color: colors.accent, fontWeight: '700', fontSize: 12 },
+    dangerText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   });
 }
