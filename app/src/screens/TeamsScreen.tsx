@@ -17,6 +17,7 @@ import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TeamsScreen({ navigation }: any) {
   const { can } = useAuth();
@@ -145,9 +146,9 @@ export default function TeamsScreen({ navigation }: any) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
           }
-          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
+          contentContainerStyle={styles.grid}
           ListHeaderComponent={
-            <View style={{ marginBottom: 12 }}>
+            <View style={styles.listHeader}>
               <Text style={styles.sub}>
                 Non-admins only see teams they belong to. Admins (or roles with “view all teams”) see
                 every team.
@@ -155,7 +156,10 @@ export default function TeamsScreen({ navigation }: any) {
               {!!msg && <Text style={styles.msg}>{msg}</Text>}
               {can('teams.create') && !showForm ? (
                 <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>
-                  <Text style={styles.btnText}>+ Create team</Text>
+                  <View style={styles.btnInner}>
+                    <Ionicons name="people-outline" size={16} color={colors.onAccent} />
+                    <Text style={styles.btnText}>Create team</Text>
+                  </View>
                 </TouchableOpacity>
               ) : null}
               {showForm ? (
@@ -251,6 +255,7 @@ export default function TeamsScreen({ navigation }: any) {
               <View style={styles.actions}>
                 {can('teams.edit') ? (
                   <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
+                    <Ionicons name="create-outline" size={14} color="#fff" />
                     <Text style={styles.miniText}>Edit</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -259,6 +264,7 @@ export default function TeamsScreen({ navigation }: any) {
                     style={[styles.mini, styles.danger]}
                     onPress={() => removeTeam(item)}
                   >
+                    <Ionicons name="trash-outline" size={14} color="#fff" />
                     <Text style={styles.miniText}>Delete</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -274,6 +280,19 @@ export default function TeamsScreen({ navigation }: any) {
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.cardGap,
+      padding: 16,
+      paddingBottom: 40,
+      alignItems: 'flex-start',
+    },
+    listHeader: {
+      width: '100%',
+      flexBasis: '100%',
+      marginBottom: 4,
+    },
     sub: { color: colors.textMuted, marginBottom: 12, lineHeight: 20 },
     msg: {
       color: colors.accent,
@@ -286,11 +305,13 @@ function makeStyles(colors: ThemeColors) {
     },
     form: {
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 8,
+      maxWidth: 480,
+      width: '100%',
     },
     formTitle: { color: colors.text, fontWeight: '700', marginBottom: 10, fontSize: 16 },
     label: { color: colors.textMuted, marginBottom: 8, marginTop: 8, fontWeight: '600' },
@@ -298,11 +319,13 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.bgElevated,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.inputRadius,
+      paddingHorizontal: spacing.inputPadH,
+      paddingVertical: spacing.inputPadV,
       color: colors.text,
       marginBottom: 8,
+      fontSize: spacing.inputFont,
+      minHeight: 38,
     },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
     chip: {
@@ -324,14 +347,17 @@ function makeStyles(colors: ThemeColors) {
       marginBottom: 8,
       minHeight: 38,
       justifyContent: 'center',
+      maxWidth: spacing.cardWidth,
     },
     btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
+    btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     secondary: {
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
+      maxWidth: spacing.cardWidth,
     },
     secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     card: {
@@ -340,6 +366,8 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
+      width: spacing.cardWidth,
+      maxWidth: '100%',
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12, lineHeight: 18 },
@@ -349,9 +377,12 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 8,
       paddingHorizontal: 12,
       paddingVertical: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     danger: { backgroundColor: colors.danger },
     miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 24 },
+    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 24, width: '100%' },
   });
 }

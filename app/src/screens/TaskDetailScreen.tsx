@@ -16,6 +16,7 @@ import { useAuth } from '../auth';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
 import ReminderPickerModal from '../components/ReminderPickerModal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TaskDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
@@ -194,8 +195,9 @@ export default function TaskDetailScreen({ route, navigation }: any) {
           <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
         }
       >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>← Back</Text>
+        <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={18} color={colors.info} />
+          <Text style={styles.back}>Back</Text>
         </TouchableOpacity>
 
         <View style={styles.titleRow}>
@@ -205,6 +207,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
               style={styles.editBtn}
               onPress={() => navigation.navigate('CreateTask', { taskId: id })}
             >
+              <Ionicons name="create-outline" size={14} color={colors.onAccent} />
               <Text style={styles.editBtnText}>Edit</Text>
             </TouchableOpacity>
           ) : null}
@@ -251,6 +254,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
               style={[styles.input, styles.reminderBtn, { flex: 1, marginTop: 0 }]}
               onPress={() => setPickerIndex(index)}
             >
+              <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
               <Text style={value ? styles.reminderValue : styles.reminderPlaceholder}>
                 {value || 'Tap to pick date & time'}
               </Text>
@@ -260,6 +264,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
                 style={styles.miniBtn}
                 onPress={() => setRemindersLocal((list) => list.filter((_, i) => i !== index))}
               >
+                <Ionicons name="trash-outline" size={14} color={colors.accent} />
                 <Text style={styles.miniBtnText}>Remove</Text>
               </TouchableOpacity>
             ) : null}
@@ -269,9 +274,11 @@ export default function TaskDetailScreen({ route, navigation }: any) {
           style={[styles.secondaryBtn, { marginTop: 8 }]}
           onPress={() => setRemindersLocal((list) => [...list, ''])}
         >
-          <Text style={styles.secondaryBtnText}>+ Add another reminder</Text>
+          <Ionicons name="add-outline" size={16} color={colors.accent} />
+          <Text style={styles.secondaryBtnText}>Add another reminder</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.secondaryBtn} onPress={saveReminder}>
+          <Ionicons name="notifications-outline" size={16} color={colors.accent} />
           <Text style={styles.secondaryBtnText}>Save reminders & notify</Text>
         </TouchableOpacity>
 
@@ -331,6 +338,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
             placeholderTextColor={colors.textMuted}
           />
           <TouchableOpacity style={styles.miniBtn} onPress={addChecklist}>
+            <Ionicons name="add-outline" size={14} color={colors.accent} />
             <Text style={styles.miniBtnText}>Add</Text>
           </TouchableOpacity>
         </View>
@@ -341,6 +349,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
 
         {can('tasks.delete') ? (
           <TouchableOpacity style={styles.deleteBtn} onPress={deleteTask}>
+            <Ionicons name="trash-outline" size={16} color="#fff" />
             <Text style={styles.deleteBtnText}>Delete task</Text>
           </TouchableOpacity>
         ) : null}
@@ -362,7 +371,14 @@ export default function TaskDetailScreen({ route, navigation }: any) {
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
-    back: { color: colors.info, marginTop: 48, marginBottom: 8 },
+    back: { color: colors.info, fontWeight: '600' },
+    backRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 48,
+      marginBottom: 8,
+    },
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     title: { color: colors.text, fontSize: 26, fontWeight: '800' },
     editBtn: {
@@ -372,6 +388,9 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: spacing.btnPadV,
       borderWidth: 1,
       borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     editBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     desc: { color: colors.textMuted, marginTop: 8, marginBottom: 12 },
@@ -408,9 +427,9 @@ function makeStyles(colors: ThemeColors) {
       minHeight: 38,
       marginTop: 8,
     },
-    reminderBtn: { justifyContent: 'center' },
-    reminderValue: { color: colors.text, fontSize: spacing.inputFont },
-    reminderPlaceholder: { color: colors.textMuted, fontSize: spacing.inputFont },
+    reminderBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    reminderValue: { color: colors.text, fontSize: spacing.inputFont, flex: 1 },
+    reminderPlaceholder: { color: colors.textMuted, fontSize: spacing.inputFont, flex: 1 },
     secondaryBtn: {
       marginTop: 10,
       backgroundColor: colors.bgCard,
@@ -421,6 +440,8 @@ function makeStyles(colors: ThemeColors) {
       borderColor: colors.border,
       minHeight: 38,
       justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 6,
     },
     secondaryBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     checkCard: {
@@ -461,6 +482,9 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: spacing.btnRadius,
       paddingHorizontal: spacing.btnPadH,
       paddingVertical: spacing.btnPadV,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     dangerBtn: { backgroundColor: colors.danger },
     miniBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
@@ -474,6 +498,8 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       minHeight: 38,
       justifyContent: 'center',
+      flexDirection: 'row',
+      gap: 6,
     },
     deleteBtnText: { color: '#fff', fontWeight: '800', fontSize: spacing.btnFont },
   });

@@ -1,31 +1,63 @@
 import React, { useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../auth';
 import { useTheme, ThemeColors, ThemeMode } from '../theme';
 import AppShell from '../components/AppShell';
 
-const LINKS = [
-  { key: 'ChangePassword', label: 'Change password', desc: 'Update your account password' },
-  { key: 'Sounds', label: 'Notification sounds', desc: 'Tones for alerts and reminders' },
-  { key: 'EmailSettings', label: 'Email / SMTP', desc: 'Configure outbound email' },
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const LINKS: {
+  key: string;
+  label: string;
+  desc: string;
+  icon: IconName;
+  adminOnly?: boolean;
+}[] = [
+  {
+    key: 'ChangePassword',
+    label: 'Change password',
+    desc: 'Update your account password',
+    icon: 'lock-closed-outline',
+  },
+  {
+    key: 'Sounds',
+    label: 'Notification sounds',
+    desc: 'Tones for alerts and reminders',
+    icon: 'musical-notes-outline',
+  },
+  {
+    key: 'EmailSettings',
+    label: 'Email / SMTP',
+    desc: 'Configure outbound email',
+    icon: 'mail-outline',
+  },
   {
     key: 'EmailTemplates',
     label: 'Email templates',
     desc: 'Reply, team, assignment, status & checklist email wording',
+    icon: 'document-text-outline',
     adminOnly: true,
   },
-  { key: 'Admin', label: 'Admin & storage', desc: 'Storage info and admin tools', adminOnly: true },
+  {
+    key: 'Admin',
+    label: 'Admin & storage',
+    desc: 'Storage info and admin tools',
+    icon: 'server-outline',
+    adminOnly: true,
+  },
   {
     key: 'Connection',
     label: 'Server connection',
     desc: 'Shared cloud URL or local hub address',
+    icon: 'wifi-outline',
   },
 ];
 
-const THEME_OPTIONS: { mode: ThemeMode; label: string; desc: string }[] = [
-  { mode: 'light', label: 'Light', desc: 'Bright workspace' },
-  { mode: 'dark', label: 'Dark', desc: 'Low-glare hub' },
-  { mode: 'system', label: 'System', desc: 'Match device setting' },
+const THEME_OPTIONS: { mode: ThemeMode; label: string; desc: string; icon: IconName }[] = [
+  { mode: 'light', label: 'Light', desc: 'Bright workspace', icon: 'sunny-outline' },
+  { mode: 'dark', label: 'Dark', desc: 'Low-glare hub', icon: 'moon-outline' },
+  { mode: 'system', label: 'System', desc: 'Match device setting', icon: 'phone-portrait-outline' },
 ];
 
 export default function SettingsScreen({ navigation }: any) {
@@ -56,6 +88,11 @@ export default function SettingsScreen({ navigation }: any) {
                   style={[styles.themeCard, on && styles.themeCardOn]}
                   onPress={() => setMode(opt.mode)}
                 >
+                  <Ionicons
+                    name={opt.icon}
+                    size={20}
+                    color={on ? colors.accent : colors.textMuted}
+                  />
                   <Text style={[styles.themeLabel, on && styles.themeLabelOn]}>{opt.label}</Text>
                   <Text style={styles.themeDesc}>{opt.desc}</Text>
                 </TouchableOpacity>
@@ -70,8 +107,14 @@ export default function SettingsScreen({ navigation }: any) {
             style={styles.card}
             onPress={() => navigation.navigate(item.key)}
           >
-            <Text style={styles.cardTitle}>{item.label}</Text>
-            <Text style={styles.meta}>{item.desc}</Text>
+            <View style={styles.cardIcon}>
+              <Ionicons name={item.icon} size={20} color={colors.accent} />
+            </View>
+            <View style={styles.cardBody}>
+              <Text style={styles.cardTitle}>{item.label}</Text>
+              <Text style={styles.meta}>{item.desc}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -88,6 +131,8 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 4,
+      maxWidth: 560,
+      width: '100%',
     },
     sectionTitle: { color: colors.text, fontWeight: '800', fontSize: 16 },
     sectionHint: { color: colors.textMuted, marginTop: 6, marginBottom: 12, fontSize: 13 },
@@ -101,6 +146,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.bgElevated,
       paddingVertical: 12,
       paddingHorizontal: 12,
+      gap: 6,
     },
     themeCardOn: {
       borderColor: colors.accent,
@@ -108,15 +154,29 @@ function makeStyles(colors: ThemeColors) {
     },
     themeLabel: { color: colors.text, fontWeight: '800', fontSize: 14 },
     themeLabelOn: { color: colors.text },
-    themeDesc: { color: colors.textMuted, fontSize: 11, marginTop: 4 },
+    themeDesc: { color: colors.textMuted, fontSize: 11 },
     card: {
       backgroundColor: colors.bgCard,
       borderRadius: 14,
-      padding: 16,
+      padding: 14,
       borderWidth: 1,
       borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      maxWidth: 560,
+      width: '100%',
     },
-    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 16 },
-    meta: { color: colors.textMuted, marginTop: 6 },
+    cardIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: colors.accentDim,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    cardBody: { flex: 1, minWidth: 0 },
+    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
+    meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
   });
 }

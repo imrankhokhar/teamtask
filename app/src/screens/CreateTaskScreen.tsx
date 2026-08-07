@@ -14,6 +14,7 @@ import { useTheme, ThemeColors, spacing } from '../theme';
 import FormField from '../components/FormField';
 import LoadingView from '../components/LoadingView';
 import ReminderPickerModal from '../components/ReminderPickerModal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 /** Accepts 2026-07-30T7:40 or 2026-07-30T07:40 — browsers reject single-digit hours. */
 function parseReminderLocal(raw: string): Date {
@@ -179,12 +180,14 @@ export default function CreateTaskScreen({ navigation, route }: any) {
       keyboardShouldPersistTaps="handled"
     >
       <TouchableOpacity
+        style={styles.backRow}
         onPress={() => {
           if (navigation.canGoBack?.()) navigation.goBack();
           else navigation.navigate('Tasks');
         }}
       >
-        <Text style={styles.back}>← Back to tasks</Text>
+        <Ionicons name="arrow-back" size={18} color={colors.info} />
+        <Text style={styles.back}>Back to tasks</Text>
       </TouchableOpacity>
 
       <Text style={styles.h1}>{editing ? 'Edit task' : 'Create task'}</Text>
@@ -297,6 +300,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
             style={[styles.input, styles.reminderBtn, { flex: 1 }]}
             onPress={() => setPickerIndex(index)}
           >
+            <Ionicons name="calendar-outline" size={16} color={colors.textMuted} />
             <Text style={value ? styles.reminderValue : styles.reminderPlaceholder}>
               {value || 'Tap to pick date & time'}
             </Text>
@@ -306,6 +310,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
               style={styles.addBtn}
               onPress={() => setRemindersLocal((list) => list.filter((_, i) => i !== index))}
             >
+              <Ionicons name="trash-outline" size={14} color={colors.danger} />
               <Text style={[styles.addBtnText, { color: colors.danger }]}>Remove</Text>
             </TouchableOpacity>
           ) : null}
@@ -315,7 +320,8 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         style={[styles.addBtn, { alignSelf: 'flex-start', marginTop: 8 }]}
         onPress={() => setRemindersLocal((list) => [...list, ''])}
       >
-        <Text style={styles.addBtnText}>+ Add another reminder</Text>
+        <Ionicons name="add-outline" size={16} color={colors.accent} />
+        <Text style={styles.addBtnText}>Add another reminder</Text>
       </TouchableOpacity>
       <Text style={styles.hint}>
         Assignees are notified when the task is created
@@ -348,7 +354,14 @@ export default function CreateTaskScreen({ navigation, route }: any) {
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
-    back: { color: colors.info, marginTop: Platform.OS === 'web' ? 12 : 48, marginBottom: 4 },
+    back: { color: colors.info, fontWeight: '600' },
+    backRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: Platform.OS === 'web' ? 12 : 48,
+      marginBottom: 4,
+    },
     h1: { color: colors.text, fontSize: 22, fontWeight: '800', marginBottom: 10 },
     banner: {
       borderRadius: 10,
@@ -386,9 +399,9 @@ function makeStyles(colors: ThemeColors) {
       fontSize: spacing.inputFont,
       minHeight: 38,
     },
-    reminderBtn: { justifyContent: 'center' },
-    reminderValue: { color: colors.text, fontSize: spacing.inputFont },
-    reminderPlaceholder: { color: colors.textMuted, fontSize: spacing.inputFont },
+    reminderBtn: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    reminderValue: { color: colors.text, fontSize: spacing.inputFont, flex: 1 },
+    reminderPlaceholder: { color: colors.textMuted, fontSize: spacing.inputFont, flex: 1 },
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     chip: {
       borderWidth: 1,
@@ -409,6 +422,9 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: spacing.btnPadV,
       borderWidth: 1,
       borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     addBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     checkLine: { color: colors.text, marginTop: 4, fontSize: 13 },

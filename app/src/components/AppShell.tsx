@@ -11,23 +11,64 @@ import {
   Pressable,
   Modal,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors, spacing } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 import { getApiBaseUrlSyncFallback } from '../api';
+
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type NavItem = {
   key: string;
   label: string;
+  icon: IconName;
+  iconOn: IconName;
   perm?: string;
 };
 
 const MENU: NavItem[] = [
-  { key: 'Tasks', label: 'Tasks', perm: 'tasks.view' },
-  { key: 'Teams', label: 'Teams', perm: 'teams.view' },
-  { key: 'Users', label: 'Users', perm: 'users.view' },
-  { key: 'Roles', label: 'Roles & Permissions', perm: 'roles.view' },
-  { key: 'Notifications', label: 'Notifications', perm: 'notifications.view' },
-  { key: 'Settings', label: 'Settings', perm: 'settings.view' },
+  {
+    key: 'Tasks',
+    label: 'Tasks',
+    icon: 'checkbox-outline',
+    iconOn: 'checkbox',
+    perm: 'tasks.view',
+  },
+  {
+    key: 'Teams',
+    label: 'Teams',
+    icon: 'people-outline',
+    iconOn: 'people',
+    perm: 'teams.view',
+  },
+  {
+    key: 'Users',
+    label: 'Users',
+    icon: 'person-outline',
+    iconOn: 'person',
+    perm: 'users.view',
+  },
+  {
+    key: 'Roles',
+    label: 'Roles & Permissions',
+    icon: 'shield-checkmark-outline',
+    iconOn: 'shield-checkmark',
+    perm: 'roles.view',
+  },
+  {
+    key: 'Notifications',
+    label: 'Notifications',
+    icon: 'notifications-outline',
+    iconOn: 'notifications',
+    perm: 'notifications.view',
+  },
+  {
+    key: 'Settings',
+    label: 'Settings',
+    icon: 'settings-outline',
+    iconOn: 'settings',
+    perm: 'settings.view',
+  },
 ];
 
 function avatarUrl(path?: string | null) {
@@ -70,7 +111,10 @@ export default function AppShell({
 
   const sidebar = (
     <View style={[styles.sidebar, !sidebarWide && styles.sidebarCompact]}>
-      <Text style={styles.brand}>TeamTask</Text>
+      <View style={styles.brandRow}>
+        <Ionicons name="layers" size={20} color={colors.accent} />
+        <Text style={styles.brand}>TeamTask</Text>
+      </View>
       <ScrollView
         style={{ flex: sidebarWide ? 1 : undefined }}
         horizontal={!sidebarWide}
@@ -81,12 +125,14 @@ export default function AppShell({
       >
         {items.map((item) => {
           const on = active === item.key;
+          const color = on ? colors.text : colors.textMuted;
           return (
             <TouchableOpacity
               key={item.key}
               style={[styles.navItem, on && styles.navItemOn]}
               onPress={() => navigation.navigate(item.key)}
             >
+              <Ionicons name={on ? item.iconOn : item.icon} size={18} color={color} />
               <Text style={[styles.navText, on && styles.navTextOn]}>{item.label}</Text>
             </TouchableOpacity>
           );
@@ -94,6 +140,7 @@ export default function AppShell({
       </ScrollView>
       {sidebarWide ? (
         <TouchableOpacity onPress={logout} style={styles.logout}>
+          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
       ) : null}
@@ -123,6 +170,7 @@ export default function AppShell({
                 <Text style={styles.avatarText}>{initials(user?.name)}</Text>
               )}
             </View>
+            <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
@@ -136,12 +184,15 @@ export default function AppShell({
               {user?.email}
             </Text>
             <TouchableOpacity style={styles.menuItem} onPress={() => go('Profile')}>
+              <Ionicons name="person-circle-outline" size={18} color={colors.text} />
               <Text style={styles.menuItemText}>Profile</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => go('Settings')}>
+              <Ionicons name="settings-outline" size={18} color={colors.text} />
               <Text style={styles.menuItemText}>Settings</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem} onPress={() => go('Notifications')}>
+              <Ionicons name="notifications-outline" size={18} color={colors.text} />
               <Text style={styles.menuItemText}>Notifications</Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -151,6 +202,7 @@ export default function AppShell({
                 logout();
               }}
             >
+              <Ionicons name="log-out-outline" size={18} color={colors.danger} />
               <Text style={styles.menuDangerText}>Logout</Text>
             </TouchableOpacity>
           </View>
@@ -166,7 +218,7 @@ function makeStyles(colors: ThemeColors) {
     row: { flexDirection: 'row' },
     col: { flexDirection: 'column' },
     sidebar: {
-      width: 200,
+      width: 220,
       backgroundColor: colors.bgElevated,
       borderRightWidth: 1,
       borderRightColor: colors.border,
@@ -182,22 +234,37 @@ function makeStyles(colors: ThemeColors) {
       paddingTop: Platform.OS === 'web' ? 10 : 36,
       maxHeight: 96,
     },
+    brandRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 6,
+      paddingHorizontal: 4,
+    },
     brand: {
       color: colors.accent,
       fontSize: 18,
       fontWeight: '800',
-      marginBottom: 6,
       letterSpacing: -0.3,
     },
     navItem: {
       borderRadius: 8,
       paddingVertical: 8,
       paddingHorizontal: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
     navItemOn: { backgroundColor: colors.accentDim },
     navText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
     navTextOn: { color: colors.text, fontWeight: '800' },
-    logout: { paddingVertical: 8, paddingHorizontal: 10 },
+    logout: {
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
     logoutText: { color: colors.danger, fontWeight: '700', fontSize: 13 },
     content: { flex: 1, minWidth: 0 },
     contentHeader: {
@@ -222,7 +289,7 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      maxWidth: 220,
+      maxWidth: 240,
     },
     userName: {
       color: colors.text,
@@ -273,6 +340,9 @@ function makeStyles(colors: ThemeColors) {
     menuItem: {
       paddingHorizontal: 12,
       paddingVertical: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
     },
     menuItemText: { color: colors.text, fontWeight: '700', fontSize: 14 },
     menuDanger: { borderTopWidth: 1, borderTopColor: colors.border },

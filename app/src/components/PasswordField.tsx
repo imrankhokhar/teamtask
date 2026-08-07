@@ -3,12 +3,12 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  Text,
   StyleSheet,
   TextInputProps,
   StyleProp,
   ViewStyle,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme, ThemeColors, spacing } from '../theme';
 
 type Props = TextInputProps & {
@@ -36,7 +36,11 @@ export default function PasswordField({ style, containerStyle, error, ...rest }:
         accessibilityLabel={visible ? 'Hide password' : 'Show password'}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Text style={styles.eyeGlyph}>{visible ? '◉' : '◎'}</Text>
+        <Ionicons
+          name={visible ? 'eye-off-outline' : 'eye-outline'}
+          size={18}
+          color={colors.textMuted}
+        />
       </TouchableOpacity>
     </View>
   );
@@ -68,11 +72,6 @@ function makeStyles(colors: ThemeColors) {
       right: 10,
       paddingVertical: 2,
       paddingHorizontal: 2,
-    },
-    eyeGlyph: {
-      color: colors.textMuted,
-      fontSize: 16,
-      fontWeight: '700',
     },
   });
 }

@@ -10,9 +10,10 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function NotificationsScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -52,7 +53,8 @@ export default function NotificationsScreen({ navigation }: any) {
       <View style={styles.root}>
         <View style={styles.header}>
           <Text style={styles.sub}>Only tasks you are assigned to (or report) appear here.</Text>
-          <TouchableOpacity onPress={markAll}>
+          <TouchableOpacity style={styles.markAll} onPress={markAll}>
+            <Ionicons name="checkmark-done-outline" size={16} color={colors.accent} />
             <Text style={styles.link}>Mark all read</Text>
           </TouchableOpacity>
         </View>
@@ -66,7 +68,7 @@ export default function NotificationsScreen({ navigation }: any) {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
             }
-            contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 10 }}
+            contentContainerStyle={styles.grid}
             ListEmptyComponent={<Text style={styles.empty}>No notifications yet</Text>}
             renderItem={({ item }) => (
               <TouchableOpacity
@@ -99,18 +101,29 @@ function makeStyles(colors: ThemeColors) {
       gap: 12,
     },
     sub: { color: colors.textMuted, flex: 1, lineHeight: 18 },
+    markAll: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     link: { color: colors.accent, fontWeight: '700' },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.cardGap,
+      padding: 16,
+      paddingBottom: 40,
+      alignItems: 'flex-start',
+    },
     card: {
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
+      width: spacing.cardWidth,
+      maxWidth: '100%',
     },
     unread: { borderColor: colors.accent },
-    cardTitle: { color: colors.text, fontWeight: '700' },
-    meta: { color: colors.textMuted, marginTop: 6, lineHeight: 18 },
+    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
+    meta: { color: colors.textMuted, marginTop: 4, lineHeight: 18, fontSize: 12 },
     time: { color: colors.textMuted, marginTop: 8, fontSize: 11 },
-    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
+    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40, width: '100%' },
   });
 }

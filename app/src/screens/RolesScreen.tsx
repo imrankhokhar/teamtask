@@ -16,6 +16,7 @@ import { useTheme, ThemeColors, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 function Field({
   value,
@@ -209,7 +210,10 @@ export default function RolesScreen({ navigation }: any) {
           {!!msg && <Text style={styles.msg}>{msg}</Text>}
           {can('roles.create') && !showForm ? (
             <TouchableOpacity style={styles.btn} onPress={startCreate}>
-              <Text style={styles.btnText}>+ Create role</Text>
+              <View style={styles.btnInner}>
+                <Ionicons name="shield-checkmark-outline" size={16} color={colors.onAccent} />
+                <Text style={styles.btnText}>Create role</Text>
+              </View>
             </TouchableOpacity>
           ) : null}
 
@@ -285,7 +289,7 @@ export default function RolesScreen({ navigation }: any) {
             </View>
           ) : null}
 
-          <View style={{ gap: 10, marginTop: 8 }}>
+          <View style={styles.cardGrid}>
             {roles.map((item) => (
               <View key={item.id} style={styles.card}>
                 <Text style={styles.cardTitle}>
@@ -297,6 +301,7 @@ export default function RolesScreen({ navigation }: any) {
                 <View style={styles.actions}>
                   {can('roles.edit') ? (
                     <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
+                      <Ionicons name="create-outline" size={14} color="#fff" />
                       <Text style={styles.miniText}>Edit</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -305,6 +310,7 @@ export default function RolesScreen({ navigation }: any) {
                       style={[styles.mini, styles.danger]}
                       onPress={() => removeRole(item)}
                     >
+                      <Ionicons name="trash-outline" size={14} color="#fff" />
                       <Text style={styles.miniText}>Delete</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -340,6 +346,7 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
+    btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     secondary: {
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
@@ -355,6 +362,8 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 12,
+      maxWidth: 520,
+      width: '100%',
     },
     formTitle: { color: colors.text, fontWeight: '700', marginBottom: 10, fontSize: 16 },
     label: { color: colors.textMuted, marginBottom: 8, marginTop: 4, fontWeight: '600' },
@@ -384,12 +393,20 @@ function makeStyles(colors: ThemeColors) {
     chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
     chipText: { color: colors.text, fontSize: 12 },
     chipTextOn: { color: colors.onAccent, fontWeight: '700' },
+    cardGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.cardGap,
+      marginTop: 8,
+    },
     card: {
       backgroundColor: colors.bgCard,
       borderRadius: spacing.cardRadius,
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
+      width: spacing.cardWidth,
+      maxWidth: '100%',
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
@@ -399,6 +416,9 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 8,
       paddingHorizontal: 12,
       paddingVertical: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     danger: { backgroundColor: colors.danger },
     miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },

@@ -17,6 +17,7 @@ import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function UsersScreen({ navigation }: any) {
   const { can } = useAuth();
@@ -172,13 +173,16 @@ export default function UsersScreen({ navigation }: any) {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
           }
-          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }}
+          contentContainerStyle={styles.grid}
           ListHeaderComponent={
-            <View style={{ marginBottom: 12 }}>
+            <View style={styles.listHeader}>
               {!!msg && <Text style={styles.msg}>{msg}</Text>}
               {can('users.create') && !showForm ? (
                 <TouchableOpacity style={styles.btn} onPress={() => setShowForm(true)}>
-                  <Text style={styles.btnText}>+ Create user</Text>
+                  <View style={styles.btnInner}>
+                    <Ionicons name="person-add-outline" size={16} color={colors.onAccent} />
+                    <Text style={styles.btnText}>Create user</Text>
+                  </View>
                 </TouchableOpacity>
               ) : null}
               {showForm ? (
@@ -265,6 +269,7 @@ export default function UsersScreen({ navigation }: any) {
               <View style={styles.actions}>
                 {can('users.edit') ? (
                   <TouchableOpacity style={styles.mini} onPress={() => startEdit(item)}>
+                    <Ionicons name="create-outline" size={14} color="#fff" />
                     <Text style={styles.miniText}>Edit</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -273,6 +278,7 @@ export default function UsersScreen({ navigation }: any) {
                     style={[styles.mini, styles.danger]}
                     onPress={() => removeUser(item)}
                   >
+                    <Ionicons name="trash-outline" size={14} color="#fff" />
                     <Text style={styles.miniText}>Delete</Text>
                   </TouchableOpacity>
                 ) : null}
@@ -288,6 +294,19 @@ export default function UsersScreen({ navigation }: any) {
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.cardGap,
+      padding: 16,
+      paddingBottom: 40,
+      alignItems: 'flex-start',
+    },
+    listHeader: {
+      width: '100%',
+      flexBasis: '100%',
+      marginBottom: 4,
+    },
     msg: {
       color: colors.accent,
       backgroundColor: colors.bgCard,
@@ -305,14 +324,17 @@ function makeStyles(colors: ThemeColors) {
       marginBottom: 8,
       minHeight: 38,
       justifyContent: 'center',
+      maxWidth: spacing.cardWidth,
     },
     btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
+    btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     secondary: {
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,
       alignItems: 'center',
       borderWidth: 1,
       borderColor: colors.border,
+      maxWidth: spacing.cardWidth,
     },
     secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     form: {
@@ -322,6 +344,8 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
       marginBottom: 8,
+      maxWidth: 480,
+      width: '100%',
     },
     formTitle: { color: colors.text, fontWeight: '700', marginBottom: 10, fontSize: 16 },
     label: { color: colors.textMuted, marginBottom: 8, marginTop: 4, fontWeight: '600' },
@@ -343,6 +367,8 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
+      width: spacing.cardWidth,
+      maxWidth: '100%',
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
@@ -352,9 +378,12 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 8,
       paddingHorizontal: 12,
       paddingVertical: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
     },
     danger: { backgroundColor: colors.danger },
     miniText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 24 },
+    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 24, width: '100%' },
   });
 }

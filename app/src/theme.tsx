@@ -94,7 +94,9 @@ export const spacing = {
   btnRadius: 10,
   cardPad: 12,
   cardRadius: 12,
-  cardGap: 8,
+  cardGap: 12,
+  /** Standard list card width — cards wrap instead of stretching full row */
+  cardWidth: 340,
   labelFont: 12,
 };
 

@@ -15,6 +15,7 @@ import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function TasksScreen({ navigation }: any) {
   const { can } = useAuth();
@@ -58,7 +59,7 @@ export default function TasksScreen({ navigation }: any) {
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
             }
-            contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 100 }}
+            contentContainerStyle={styles.grid}
             ListEmptyComponent={
               <Text style={styles.empty}>No tasks yet. Create one to get started.</Text>
             }
@@ -107,7 +108,10 @@ export default function TasksScreen({ navigation }: any) {
                       }
                     }}
                   >
+                  <View style={styles.deleteLinkRow}>
+                    <Ionicons name="trash-outline" size={13} color={colors.danger} />
                     <Text style={styles.deleteLink}>Delete</Text>
+                  </View>
                   </TouchableOpacity>
                 )}
               </TouchableOpacity>
@@ -127,7 +131,10 @@ export default function TasksScreen({ navigation }: any) {
                 })
               }
             >
-              <Text style={styles.fabText}>+ Task</Text>
+              <View style={styles.fabInner}>
+                <Ionicons name="add" size={18} color={colors.onAccent} />
+                <Text style={styles.fabText}>Task</Text>
+              </View>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -140,12 +147,22 @@ export default function TasksScreen({ navigation }: any) {
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
+    grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.cardGap,
+      padding: 16,
+      paddingBottom: 100,
+      alignItems: 'flex-start',
+    },
     card: {
       backgroundColor: colors.bgCard,
       borderRadius: spacing.cardRadius,
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
+      width: spacing.cardWidth,
+      maxWidth: '100%',
     },
     row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'center' },
     cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700', flex: 1 },
@@ -157,7 +174,7 @@ function makeStyles(colors: ThemeColors) {
       textTransform: 'capitalize',
     },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
-    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
+    empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40, width: '100%' },
     fabRow: {
       position: 'absolute',
       right: 16,
@@ -171,8 +188,10 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: 14,
       paddingVertical: spacing.btnPadV,
     },
+    fabInner: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     fabText: { color: colors.onAccent, fontWeight: '800' },
     deleteLinkWrap: { marginTop: 10, alignSelf: 'flex-start' },
+    deleteLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     deleteLink: { color: colors.danger, fontWeight: '700', fontSize: 12 },
   });
 }

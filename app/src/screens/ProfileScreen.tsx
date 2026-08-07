@@ -16,6 +16,7 @@ import { useTheme, ThemeColors, spacing } from '../theme';
 import FormField from '../components/FormField';
 import PasswordField from '../components/PasswordField';
 import AppShell from '../components/AppShell';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 function resolveAvatar(url?: string | null) {
   if (!url) return null;
@@ -126,14 +127,17 @@ export default function ProfileScreen({ navigation }: any) {
             {photo ? (
               <Image source={{ uri: photo }} style={styles.avatarImg} />
             ) : (
-              <Text style={styles.avatarPlaceholder}>Photo</Text>
+              <Ionicons name="person" size={36} color={colors.textMuted} />
             )}
           </View>
           <TouchableOpacity style={styles.secondaryBtn} onPress={pickAvatar} disabled={uploading}>
             {uploading ? (
               <ActivityIndicator color={colors.accent} />
             ) : (
-              <Text style={styles.secondaryBtnText}>Change picture</Text>
+              <View style={styles.secondaryBtnInner}>
+                <Ionicons name="camera-outline" size={16} color={colors.accent} />
+                <Text style={styles.secondaryBtnText}>Change picture</Text>
+              </View>
             )}
           </TouchableOpacity>
         </View>
@@ -230,6 +234,7 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     secondaryBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
+    secondaryBtnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     banner: {
       borderRadius: 10,
       padding: 10,
