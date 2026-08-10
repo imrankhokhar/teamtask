@@ -1826,8 +1826,8 @@ async function boot() {
     console.error('Database init failed:', err.message);
     process.exit(1);
   }
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log(`TeamTask API running on http://0.0.0.0:${PORT}`);
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`TeamTask API running on http://127.0.0.1:${PORT}`);
   });
 }
 
