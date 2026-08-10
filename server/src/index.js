@@ -1784,16 +1784,48 @@ for (const candidate of webCandidates) {
 }
 
 if (webRoot) {
-  app.use(express.static(webRoot, {
-    // Keep icon fonts / hashed assets from being rewritten to index.html
-    fallthrough: true,
-    setHeaders(res, filePath) {
-      if (/\.ttf$/i.test(filePath)) {
-        res.setHeader('Content-Type', 'font/ttf');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-      }
-    },
-  }));
+  // Nginx-safe flat font path (public/fonts copied into web root on export)
+  app.get('/fonts/:file', (req, res, next) => {
+    const file = path.basename(req.params.file || '');
+    const abs = path.join(webRoot, 'fonts', file);
+    if (!abs.startsWith(path.join(webRoot, 'fonts')) || !fs.existsSync(abs)) return next();
+    if (/\.ttf$/i.test(file)) res.type('font/ttf');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.sendFile(abs);
+  });
+
+  // Map legacy Expo vector-icon URLs (contain @expo) to the flat font file
+  app.get(
+    '/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/:file',
+    (req, res, next) => {
+      const file = path.basename(req.params.file || '');
+      const flat = path.join(webRoot, 'fonts', 'Ionicons.ttf');
+      const hashed = path.join(
+        webRoot,
+        'assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts',
+        file
+      );
+      const abs = fs.existsSync(flat) ? flat : hashed;
+      if (!fs.existsSync(abs)) return next();
+      res.type('font/ttf');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.sendFile(abs);
+    }
+  );
+
+  app.use(
+    express.static(webRoot, {
+      fallthrough: true,
+      setHeaders(res, filePath) {
+        if (/\.ttf$/i.test(filePath)) {
+          res.setHeader('Content-Type', 'font/ttf');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+        }
+      },
+    })
+  );
   app.get('/', (_req, res) => {
     res.sendFile(path.join(webRoot, 'index.html'));
   });

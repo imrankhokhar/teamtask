@@ -3,6 +3,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
 import { AuthProvider, useAuth } from './src/auth';
 import { ThemeProvider, useTheme } from './src/theme';
 import { useRealtimeNotifications } from './src/notifications';
@@ -109,6 +110,16 @@ function ThemedApp() {
 }
 
 export default function App() {
+  // Load from app assets (not node_modules/@expo/...) so production URLs have no "@"
+  // which breaks on many reverse proxies / nginx setups.
+  const [fontsLoaded] = useFonts({
+    Ionicons: require('./assets/fonts/Ionicons.ttf'),
+  });
+
+  if (!fontsLoaded) {
+    return <LoadingView fullScreen label="Loading…" />;
+  }
+
   return (
     <ThemeProvider>
       <AuthProvider>
