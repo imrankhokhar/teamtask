@@ -84,8 +84,26 @@ export default function FuelCalScreen({ navigation }: any) {
       } catch {
         list = [];
       }
-      // Always include signed-in user so members can at least pick themselves
-      if (me?.id && !list.some((u) => u.id === me.id)) {
+      // Members without a full user-list permission only get themselves
+      const canPickOthers =
+        me?.role === 'admin' ||
+        (me?.permissions || []).some((p) =>
+          ['users.view', 'teams.create', 'tasks.create'].includes(p)
+        );
+      if (!canPickOthers && me?.id) {
+        list = list.filter((u) => u.id === me.id);
+        if (!list.length) {
+          list = [
+            {
+              id: me.id,
+              name: me.name,
+              firstName: me.firstName,
+              lastName: me.lastName,
+              email: me.email,
+            },
+          ];
+        }
+      } else if (me?.id && !list.some((u) => u.id === me.id)) {
         list = [
           {
             id: me.id,

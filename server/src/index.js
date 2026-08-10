@@ -572,16 +572,21 @@ app.post('/api/me/push-token', authRequired, (req, res) => {
 // ---------- Users ----------
 app.get('/api/users', authRequired, (req, res) => {
   const db = readDb();
-  const canList =
+  const canFullList =
     req.isAdmin ||
     hasPermission(db, req.user, 'users.view') ||
     hasPermission(db, req.user, 'teams.create') ||
-    hasPermission(db, req.user, 'tasks.create') ||
-    hasPermission(db, req.user, 'fuel.view');
-  if (!canList) return res.status(403).json({ error: 'Missing permission: users.view' });
+    hasPermission(db, req.user, 'tasks.create');
+  const canFuelList = hasPermission(db, req.user, 'fuel.view');
+  if (!canFullList && !canFuelList) {
+    return res.status(403).json({ error: 'Missing permission: users.view' });
+  }
   const full = req.isAdmin || hasPermission(db, req.user, 'users.view');
+  const source = canFullList
+    ? db.users
+    : db.users.filter((u) => u.id === req.user.id);
   res.json({
-    users: db.users.map((u) =>
+    users: source.map((u) =>
       full
         ? publicUser(u, db)
         : {
