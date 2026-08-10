@@ -11,11 +11,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
+import AppShell from '../components/AppShell';
 
 function Field({
   value,
@@ -45,13 +47,14 @@ function Field({
           boxSizing: 'border-box',
           backgroundColor: colors.bgElevated,
           border: `1px solid ${colors.border}`,
-          borderRadius: 12,
-          padding: 12,
+          borderRadius: spacing.inputRadius,
+          padding: `${spacing.inputPadV}px ${spacing.inputPadH}px`,
           color: colors.text,
-          marginBottom: 8,
-          fontSize: 14,
+          marginBottom: 6,
+          fontSize: spacing.inputFont,
           outline: 'none',
           fontFamily: 'inherit',
+          minHeight: multiline ? 140 : 38,
           resize: multiline ? 'vertical' : undefined,
         }}
       />
@@ -78,6 +81,7 @@ export default function EmailTemplatesScreen({ navigation }: any) {
   const [placeholders, setPlaceholders] = useState<string[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
+  const [err, setErr] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -88,6 +92,7 @@ export default function EmailTemplatesScreen({ navigation }: any) {
       setPlaceholders(data.placeholders || []);
       setSelectedKey((prev) => prev || data.templates?.[0]?.key || null);
     } catch (e: any) {
+      setErr(true);
       setMsg(e.message || 'Failed to load templates');
     } finally {
       setLoaded(true);
@@ -114,6 +119,7 @@ export default function EmailTemplatesScreen({ navigation }: any) {
     try {
       setBusy(true);
       setMsg('');
+      setErr(false);
       const data = await api.saveEmailTemplates({
         templates: templates.map((t) => ({
           key: t.key,
@@ -125,6 +131,7 @@ export default function EmailTemplatesScreen({ navigation }: any) {
       setTemplates(data.templates || templates);
       setMsg('Templates saved. Emails will use these texts when SMTP is enabled.');
     } catch (e: any) {
+      setErr(true);
       setMsg(e.message || 'Save failed');
     } finally {
       setBusy(false);
@@ -141,10 +148,12 @@ export default function EmailTemplatesScreen({ navigation }: any) {
     if (!ok) return;
     try {
       setBusy(true);
+      setErr(false);
       const data = await api.resetEmailTemplates();
       setTemplates(data.templates || []);
       setMsg('Templates reset to defaults');
     } catch (e: any) {
+      setErr(true);
       setMsg(e.message || 'Reset failed');
     } finally {
       setBusy(false);
@@ -160,137 +169,192 @@ export default function EmailTemplatesScreen({ navigation }: any) {
   ];
 
   if (!loaded) {
-    return <LoadingView label="Loading templates…" fullScreen />;
+    return (
+      <AppShell navigation={navigation} active="Settings" title="Email templates">
+        <LoadingView label="Loading templates…" />
+      </AppShell>
+    );
   }
 
   return (
-    <>
+    <AppShell
+      navigation={navigation}
+      active="Settings"
+      title="Email templates"
+      info="Customize outbound emails. Admin/HOD replies use a different template from member replies. Create a role named HOD (or Manager/Lead) for the lead reply template."
+    >
       <ScrollView
-        style={styles.root}
-        contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
+        contentContainerStyle={styles.inner}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>← Back to settings</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>Email templates</Text>
-        <Text style={styles.sub}>
-          Customize outbound emails. Admin/HOD replies use a different template from member replies.
-          Create a role named HOD (or Manager/Lead) to use the lead reply template.
-        </Text>
+        <View style={styles.wrap}>
+          <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={18} color={colors.info} />
+            <Text style={styles.back}>Back to settings</Text>
+          </TouchableOpacity>
 
-        {!!msg && <Text style={styles.msg}>{msg}</Text>}
+          {!!msg && (
+            <Text style={[styles.msg, err ? styles.msgErr : styles.msgOk]}>{msg}</Text>
+          )}
 
-        <Text style={styles.hint}>Placeholders: {placeholders.join(' ')}</Text>
+          <View style={styles.placeholderBox}>
+            <Text style={styles.placeholderTitle}>Placeholders</Text>
+            <Text style={styles.hint}>{placeholders.join('  ')}</Text>
+          </View>
 
-        {categories.map((cat) => {
-          const items = templates.filter((t) => t.category === cat.key);
-          if (!items.length) return null;
-          return (
-            <View key={cat.key} style={styles.section}>
-              <Text style={styles.sectionTitle}>{cat.label}</Text>
-              <View style={styles.chips}>
-                {items.map((t) => {
-                  const on = selectedKey === t.key;
-                  return (
-                    <TouchableOpacity
-                      key={t.key}
-                      style={[styles.chip, on && styles.chipOn, !t.enabled && styles.chipOff]}
-                      onPress={() => setSelectedKey(t.key)}
-                    >
-                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{t.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+          {categories.map((cat) => {
+            const items = templates.filter((t) => t.category === cat.key);
+            if (!items.length) return null;
+            return (
+              <View key={cat.key} style={styles.section}>
+                <Text style={styles.sectionTitle}>{cat.label}</Text>
+                <View style={styles.chips}>
+                  {items.map((t) => {
+                    const on = selectedKey === t.key;
+                    return (
+                      <TouchableOpacity
+                        key={t.key}
+                        style={[styles.chip, on && styles.chipOn, !t.enabled && styles.chipOff]}
+                        onPress={() => setSelectedKey(t.key)}
+                      >
+                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{t.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
-          );
-        })}
+            );
+          })}
 
-        {selected ? (
-          <View style={styles.form}>
-            <Text style={styles.formTitle}>{selected.label}</Text>
-            <Text style={styles.meta}>{selected.description}</Text>
+          {selected ? (
+            <View style={styles.form}>
+              <View style={styles.formHead}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formTitle}>{selected.label}</Text>
+                  <Text style={styles.meta}>{selected.description}</Text>
+                </View>
+                <View style={styles.enabledRow}>
+                  <Text style={styles.labelInline}>Enabled</Text>
+                  <Switch
+                    value={selected.enabled !== false}
+                    disabled={!canEdit}
+                    onValueChange={(v) => patchSelected({ enabled: v })}
+                    trackColor={{ true: colors.accentDim, false: colors.border }}
+                    thumbColor={selected.enabled !== false ? colors.accent : colors.textMuted}
+                  />
+                </View>
+              </View>
 
-            <View style={styles.row}>
-              <Text style={styles.label}>Enabled</Text>
-              <Switch
-                value={selected.enabled !== false}
-                disabled={!canEdit}
-                onValueChange={(v) => patchSelected({ enabled: v })}
-                trackColor={{ true: colors.accentDim }}
+              <Text style={styles.label}>Subject</Text>
+              <Field
+                value={selected.subject || ''}
+                onChangeText={(v) => patchSelected({ subject: v })}
+                placeholder="Email subject"
+                colors={colors}
+                styles={styles}
+              />
+
+              <Text style={styles.label}>Body</Text>
+              <Field
+                value={selected.body || ''}
+                onChangeText={(v) => patchSelected({ body: v })}
+                placeholder="Email body"
+                multiline
+                colors={colors}
+                styles={styles}
               />
             </View>
+          ) : null}
 
-            <Text style={styles.label}>Subject</Text>
-            <Field
-              value={selected.subject || ''}
-              onChangeText={(v) => patchSelected({ subject: v })}
-              placeholder="Email subject"
-              colors={colors}
-              styles={styles}
-            />
-
-            <Text style={styles.label}>Body</Text>
-            <Field
-              value={selected.body || ''}
-              onChangeText={(v) => patchSelected({ body: v })}
-              placeholder="Email body"
-              multiline
-              colors={colors}
-              styles={styles}
-            />
-          </View>
-        ) : null}
-
-        {canEdit ? (
-          <>
-            <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
-              {busy ? (
-                <ActivityIndicator color={colors.onAccent} />
-              ) : (
-                <Text style={styles.btnText}>Save templates</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondary} onPress={resetAll} disabled={busy}>
-              <Text style={styles.secondaryText}>Reset all to defaults</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <Text style={styles.hint}>Only admins can edit templates.</Text>
-        )}
+          {canEdit ? (
+            <View style={styles.actions}>
+              <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
+                {busy ? (
+                  <ActivityIndicator color={colors.onAccent} />
+                ) : (
+                  <View style={styles.btnInner}>
+                    <Ionicons name="save-outline" size={16} color={colors.onAccent} />
+                    <Text style={styles.btnText}>Save templates</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondary} onPress={resetAll} disabled={busy}>
+                <View style={styles.btnInner}>
+                  <Ionicons name="refresh-outline" size={16} color={colors.accent} />
+                  <Text style={styles.secondaryText}>Reset defaults</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <Text style={styles.hint}>Only admins can edit templates.</Text>
+          )}
+        </View>
       </ScrollView>
       {dialog}
-    </>
+    </AppShell>
   );
 }
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    root: { flex: 1, backgroundColor: colors.bg },
-    back: { color: colors.info, marginTop: Platform.OS === 'web' ? 12 : 48 },
-    title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 8 },
-    sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 12 },
+    inner: { padding: 16, paddingBottom: 48 },
+    wrap: { width: '100%', maxWidth: 640, gap: 8 },
+    backRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 4,
+      alignSelf: 'flex-start',
+    },
+    back: { color: colors.info, fontWeight: '600', fontSize: 13 },
     msg: {
-      color: colors.accent,
-      backgroundColor: colors.bgCard,
       borderRadius: 10,
       padding: 10,
-      marginBottom: 10,
       borderWidth: 1,
+      fontSize: 13,
+      fontWeight: '600',
+      lineHeight: 18,
+    },
+    msgOk: {
+      color: colors.accent,
+      backgroundColor: colors.successBg,
       borderColor: colors.border,
     },
-    hint: { color: colors.textMuted, fontSize: 12, lineHeight: 18, marginBottom: 12 },
-    section: { marginBottom: 10 },
-    sectionTitle: { color: colors.text, fontWeight: '700', marginBottom: 8 },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    msgErr: {
+      color: colors.danger,
+      backgroundColor: colors.errorBg,
+      borderColor: colors.danger,
+    },
+    placeholderBox: {
+      backgroundColor: colors.bgElevated,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 10,
+      marginBottom: 4,
+    },
+    placeholderTitle: {
+      color: colors.text,
+      fontWeight: '700',
+      fontSize: 12,
+      marginBottom: 4,
+    },
+    hint: { color: colors.textMuted, fontSize: 11, lineHeight: 16 },
+    section: { marginBottom: 4 },
+    sectionTitle: {
+      color: colors.textMuted,
+      fontWeight: '700',
+      marginBottom: 6,
+      fontSize: 12,
+    },
+    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
     chip: {
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 999,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: colors.bgElevated,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.bgCard,
     },
     chipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
     chipOff: { opacity: 0.55 },
@@ -298,49 +362,66 @@ function makeStyles(colors: ThemeColors) {
     chipTextOn: { color: colors.onAccent, fontWeight: '700' },
     form: {
       backgroundColor: colors.bgCard,
-      borderRadius: 12,
-      padding: 14,
+      borderRadius: spacing.cardRadius,
+      padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      marginTop: 8,
-      marginBottom: 12,
+      marginTop: 4,
     },
-    formTitle: { color: colors.text, fontWeight: '800', fontSize: 16 },
-    meta: { color: colors.textMuted, marginTop: 4, marginBottom: 10, lineHeight: 18 },
-    row: {
+    formHead: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      alignItems: 'flex-start',
+      gap: 12,
       marginBottom: 8,
     },
-    label: { color: colors.textMuted, marginBottom: 6, marginTop: 8, fontWeight: '600' },
+    formTitle: { color: colors.text, fontWeight: '800', fontSize: 16 },
+    meta: { color: colors.textMuted, marginTop: 4, lineHeight: 17, fontSize: 12 },
+    enabledRow: { alignItems: 'center', gap: 4 },
+    labelInline: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
+    label: {
+      color: colors.textMuted,
+      marginBottom: 5,
+      marginTop: 8,
+      fontWeight: '700',
+      fontSize: spacing.labelFont,
+    },
     input: {
       backgroundColor: colors.bgElevated,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.inputRadius,
+      paddingHorizontal: spacing.inputPadH,
+      paddingVertical: spacing.inputPadV,
       color: colors.text,
-      marginBottom: 8,
+      marginBottom: 6,
+      fontSize: spacing.inputFont,
+      minHeight: 38,
     },
+    actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
     btn: {
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
-      minHeight: 50,
       justifyContent: 'center',
+      minHeight: 38,
+      alignSelf: 'flex-start',
     },
-    btnText: { color: colors.onAccent, fontWeight: '800' },
+    btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
     secondary: {
-      borderRadius: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: colors.border,
-      marginTop: 10,
+      backgroundColor: colors.bgElevated,
+      minHeight: 38,
+      alignSelf: 'flex-start',
     },
-    secondaryText: { color: colors.accent, fontWeight: '700' },
+    secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
   });
 }

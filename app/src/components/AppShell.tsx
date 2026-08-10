@@ -64,6 +64,12 @@ const MENU: NavItem[] = [
     perm: 'notifications.view',
   },
   {
+    key: 'FuelCal',
+    label: 'Fuel Cal',
+    icon: 'speedometer-outline',
+    iconOn: 'speedometer',
+  },
+  {
     key: 'Settings',
     label: 'Settings',
     icon: 'settings-outline',
@@ -79,6 +85,8 @@ const MODULE_INFO: Record<string, string> = {
   Users: 'Create accounts, assign roles, and manage who can access this hub.',
   Roles: 'Define what each role can view and change across modules.',
   Notifications: 'Only tasks you are assigned to (or report) appear here.',
+  FuelCal:
+    'Calculate monthly fuel-price impact per person from distance, mileage, hike amount, and work days.',
   Settings: 'Theme, password, sounds, email, branding, and connection options.',
 };
 

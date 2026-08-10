@@ -2,24 +2,27 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
   Switch,
   ActivityIndicator,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { api } from '../api';
-import { useTheme, ThemeColors } from '../theme';
+import { useTheme, ThemeColors, spacing } from '../theme';
 import { useAuth } from '../auth';
 import PasswordField from '../components/PasswordField';
+import FormField from '../components/FormField';
 import LoadingView from '../components/LoadingView';
+import AppShell from '../components/AppShell';
 
 export default function EmailSettingsScreen({ navigation }: any) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [msg, setMsg] = useState('');
+  const [err, setErr] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
@@ -54,15 +57,20 @@ export default function EmailSettingsScreen({ navigation }: any) {
           pass: '',
         }));
       })
-      .catch((e) => setMsg(e.message))
+      .catch((e) => {
+        setErr(true);
+        setMsg(e.message);
+      })
       .finally(() => setLoading(false));
   }, []);
 
   if (user?.role !== 'admin') {
     return (
-      <View style={styles.root}>
-        <Text style={styles.title}>Admin only</Text>
-      </View>
+      <AppShell navigation={navigation} active="Settings" title="Email / SMTP">
+        <View style={styles.inner}>
+          <Text style={styles.title}>Admin only</Text>
+        </View>
+      </AppShell>
     );
   }
 
@@ -70,6 +78,7 @@ export default function EmailSettingsScreen({ navigation }: any) {
     try {
       setBusy(true);
       setMsg('');
+      setErr(false);
       await api.saveSmtp({
         enabled: form.enabled,
         host: form.host,
@@ -84,6 +93,7 @@ export default function EmailSettingsScreen({ navigation }: any) {
       setMsg('SMTP saved on this device. Emails will send when enabled.');
       setForm((f) => ({ ...f, pass: '', hasPassword: true }));
     } catch (e: any) {
+      setErr(true);
       setMsg(e.message || 'Save failed');
     } finally {
       setBusy(false);
@@ -94,6 +104,7 @@ export default function EmailSettingsScreen({ navigation }: any) {
     try {
       setBusy(true);
       setMsg('');
+      setErr(false);
       const d = await api.createEtherealSmtp();
       const s = d.smtp || {};
       setForm({
@@ -112,6 +123,7 @@ export default function EmailSettingsScreen({ navigation }: any) {
         'Free Ethereal test SMTP created. Emails appear at ethereal.email (not real inboxes). Use Gmail/Outlook SMTP below for real delivery.'
       );
     } catch (e: any) {
+      setErr(true);
       setMsg(e.message || 'Failed');
     } finally {
       setBusy(false);
@@ -122,11 +134,13 @@ export default function EmailSettingsScreen({ navigation }: any) {
     try {
       setBusy(true);
       setMsg('');
+      setErr(false);
       const r = await api.testSmtp(user?.email);
       setMsg(
         r.preview ? `Test sent. Preview: ${r.preview}` : `Test email sent to ${user?.email}`
       );
     } catch (e: any) {
+      setErr(true);
       setMsg(e.message || 'Test failed');
     } finally {
       setBusy(false);
@@ -134,190 +148,242 @@ export default function EmailSettingsScreen({ navigation }: any) {
   }
 
   if (loading) {
-    return <LoadingView label="Loading SMTP…" fullScreen />;
+    return (
+      <AppShell navigation={navigation} active="Settings" title="Email / SMTP">
+        <LoadingView label="Loading SMTP…" />
+      </AppShell>
+    );
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: 40 }}>
-      <TouchableOpacity onPress={() => navigation.goBack()}>
-        <Text style={styles.back}>← Back</Text>
-      </TouchableOpacity>
-      <Text style={styles.title}>Email (SMTP)</Text>
-      <Text style={styles.sub}>
-        Yes — free SMTP credentials are required to send real emails. Options:{'\n'}
-        1) Ethereal free test inbox (view at ethereal.email){'\n'}
-        2) Your free Gmail/Outlook SMTP (app password){'\n'}
-        Settings are stored locally on this device.
-      </Text>
+    <AppShell
+      navigation={navigation}
+      active="Settings"
+      title="Email / SMTP"
+      info="Free SMTP credentials are required for real email. Use Ethereal for testing, or Gmail/Outlook app passwords for delivery. Settings stay on this device."
+    >
+      <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
+        <View style={styles.card}>
+          <TouchableOpacity style={styles.backRow} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={18} color={colors.info} />
+            <Text style={styles.back}>Back to settings</Text>
+          </TouchableOpacity>
 
-      {!!msg && <Text style={styles.msg}>{msg}</Text>}
+          <Text style={styles.sub}>
+            1) Ethereal free test inbox (ethereal.email){'\n'}
+            2) Gmail/Outlook SMTP with an app password
+          </Text>
 
-      <TouchableOpacity style={styles.btn} onPress={useEthereal} disabled={busy}>
-        {busy ? (
-          <ActivityIndicator color={colors.onAccent} />
-        ) : (
-          <Text style={styles.btnText}>Create free Ethereal test SMTP</Text>
-        )}
-      </TouchableOpacity>
+          {!!msg && (
+            <Text style={[styles.msg, err ? styles.msgErr : styles.msgOk]}>{msg}</Text>
+          )}
 
-      <View style={styles.row}>
-        <Text style={styles.label}>Enable email sending</Text>
-        <Switch
-          value={form.enabled}
-          onValueChange={(v) => setForm((f) => ({ ...f, enabled: v }))}
-          trackColor={{ true: colors.accentDim }}
-        />
-      </View>
+          <TouchableOpacity style={styles.btn} onPress={useEthereal} disabled={busy}>
+            {busy ? (
+              <ActivityIndicator color={colors.onAccent} />
+            ) : (
+              <View style={styles.btnInner}>
+                <Ionicons name="flask-outline" size={16} color={colors.onAccent} />
+                <Text style={styles.btnText}>Create Ethereal test SMTP</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-      <Text style={styles.label}>SMTP host</Text>
-      <TextInput
-        style={styles.input}
-        value={form.host}
-        onChangeText={(v) => setForm((f) => ({ ...f, host: v }))}
-        placeholder="smtp.gmail.com"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-      />
+          <View style={styles.row}>
+            <Text style={styles.toggleLabel}>Enable email sending</Text>
+            <Switch
+              value={form.enabled}
+              onValueChange={(v) => setForm((f) => ({ ...f, enabled: v }))}
+              trackColor={{ true: colors.accentDim, false: colors.border }}
+              thumbColor={form.enabled ? colors.accent : colors.textMuted}
+            />
+          </View>
 
-      <Text style={styles.label}>Port</Text>
-      <TextInput
-        style={styles.input}
-        value={form.port}
-        onChangeText={(v) =>
-          setForm((f) => {
-            const port = v;
-            const n = Number(port);
-            let secure = f.secure;
-            if (n === 465) secure = true;
-            if (n === 587 || n === 25 || n === 2525) secure = false;
-            return { ...f, port, secure };
-          })
-        }
-        placeholder="587"
-        placeholderTextColor={colors.textMuted}
-        keyboardType="number-pad"
-      />
+          <FormField
+            label="SMTP host"
+            value={form.host}
+            onChangeText={(v) => setForm((f) => ({ ...f, host: v }))}
+            placeholder="smtp.gmail.com"
+            autoCapitalize="none"
+          />
 
-      <View style={styles.row}>
-        <Text style={styles.label}>Secure (SSL on connect)</Text>
-        <Switch
-          value={form.secure}
-          onValueChange={(v) =>
-            setForm((f) => ({
-              ...f,
-              secure: v,
-              port: v && f.port === '587' ? '465' : !v && f.port === '465' ? '587' : f.port,
-            }))
-          }
-        />
-      </View>
-      <Text style={styles.hintInline}>
-        Port 587 → Secure OFF. Port 465 → Secure ON. Wrong combo causes SSL WRONG_VERSION_NUMBER.
-      </Text>
-      <Text style={styles.label}>Username / email</Text>
-      <TextInput
-        style={styles.input}
-        value={form.user}
-        onChangeText={(v) => setForm((f) => ({ ...f, user: v }))}
-        placeholder="you@gmail.com"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-      />
+          <FormField
+            label="Port"
+            value={form.port}
+            onChangeText={(v) =>
+              setForm((f) => {
+                const port = v;
+                const n = Number(port);
+                let secure = f.secure;
+                if (n === 465) secure = true;
+                if (n === 587 || n === 25 || n === 2525) secure = false;
+                return { ...f, port, secure };
+              })
+            }
+            placeholder="587"
+            keyboardType="number-pad"
+          />
 
-      <Text style={styles.label}>
-        Password / app password {form.hasPassword ? '(saved)' : ''}
-      </Text>
-      <PasswordField
-        value={form.pass}
-        onChangeText={(v) => setForm((f) => ({ ...f, pass: v }))}
-        placeholder={form.hasPassword ? 'Leave blank to keep saved' : 'App password'}
-      />
-      <Text style={styles.label}>From address</Text>
-      <TextInput
-        style={styles.input}
-        value={form.from}
-        onChangeText={(v) => setForm((f) => ({ ...f, from: v }))}
-        placeholder="same as username"
-        placeholderTextColor={colors.textMuted}
-        autoCapitalize="none"
-      />
+          <View style={styles.row}>
+            <Text style={styles.toggleLabel}>Secure (SSL on connect)</Text>
+            <Switch
+              value={form.secure}
+              onValueChange={(v) =>
+                setForm((f) => ({
+                  ...f,
+                  secure: v,
+                  port: v && f.port === '587' ? '465' : !v && f.port === '465' ? '587' : f.port,
+                }))
+              }
+              trackColor={{ true: colors.accentDim, false: colors.border }}
+              thumbColor={form.secure ? colors.accent : colors.textMuted}
+            />
+          </View>
+          <Text style={styles.hintInline}>
+            Port 587 → Secure OFF. Port 465 → Secure ON. Wrong combo causes SSL WRONG_VERSION_NUMBER.
+          </Text>
 
-      <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
-        {busy ? (
-          <ActivityIndicator color={colors.onAccent} />
-        ) : (
-          <Text style={styles.btnText}>Save SMTP</Text>
-        )}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondary} onPress={test} disabled={busy}>
-        <Text style={styles.secondaryText}>Send test email to me</Text>
-      </TouchableOpacity>
+          <FormField
+            label="Username / email"
+            value={form.user}
+            onChangeText={(v) => setForm((f) => ({ ...f, user: v }))}
+            placeholder="you@gmail.com"
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
 
-      <Text style={styles.hint}>
-        Gmail free tip: enable 2FA → create an App Password → host smtp.gmail.com port 587.
-        Outlook: smtp.office365.com port 587.
-      </Text>
-    </ScrollView>
+          <FormField
+            label={`Password / app password${form.hasPassword ? ' (saved)' : ''}`}
+          >
+            <PasswordField
+              value={form.pass}
+              onChangeText={(v) => setForm((f) => ({ ...f, pass: v }))}
+              placeholder={form.hasPassword ? 'Leave blank to keep saved' : 'App password'}
+            />
+          </FormField>
+
+          <FormField
+            label="From address"
+            value={form.from}
+            onChangeText={(v) => setForm((f) => ({ ...f, from: v }))}
+            placeholder="same as username"
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+
+          <View style={styles.actions}>
+            <TouchableOpacity style={styles.btn} onPress={save} disabled={busy}>
+              {busy ? (
+                <ActivityIndicator color={colors.onAccent} />
+              ) : (
+                <View style={styles.btnInner}>
+                  <Ionicons name="save-outline" size={16} color={colors.onAccent} />
+                  <Text style={styles.btnText}>Save SMTP</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondary} onPress={test} disabled={busy}>
+              <View style={styles.btnInner}>
+                <Ionicons name="send-outline" size={16} color={colors.accent} />
+                <Text style={styles.secondaryText}>Send test email</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.hint}>
+            Gmail: enable 2FA → App Password → smtp.gmail.com:587. Outlook: smtp.office365.com:587.
+          </Text>
+        </View>
+      </ScrollView>
+    </AppShell>
   );
 }
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    root: { flex: 1, backgroundColor: colors.bg, padding: 16 },
-    back: { color: colors.info, marginTop: 48 },
-    title: { color: colors.text, fontSize: 26, fontWeight: '800', marginVertical: 8 },
-    sub: { color: colors.textMuted, lineHeight: 20, marginBottom: 12 },
-    msg: {
-      color: colors.accent,
+    inner: { padding: 16, paddingBottom: 40, alignItems: 'flex-start' },
+    card: {
+      width: '100%',
+      maxWidth: 480,
       backgroundColor: colors.bgCard,
-      borderRadius: 10,
-      padding: 10,
-      marginBottom: 12,
+      borderRadius: 14,
       borderWidth: 1,
       borderColor: colors.border,
+      padding: 20,
+      gap: 4,
+    },
+    backRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
+      alignSelf: 'flex-start',
+    },
+    back: { color: colors.info, fontWeight: '600', fontSize: 13 },
+    title: { color: colors.text, fontSize: 22, fontWeight: '800' },
+    sub: { color: colors.textMuted, lineHeight: 18, marginBottom: 10, fontSize: 13 },
+    msg: {
+      borderRadius: 10,
+      padding: 10,
+      marginBottom: 8,
+      borderWidth: 1,
+      fontSize: 13,
+      fontWeight: '600',
+      lineHeight: 18,
+    },
+    msgOk: {
+      color: colors.accent,
+      backgroundColor: colors.successBg,
+      borderColor: colors.border,
+    },
+    msgErr: {
+      color: colors.danger,
+      backgroundColor: colors.errorBg,
+      borderColor: colors.danger,
     },
     row: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       marginVertical: 8,
+      gap: 12,
     },
-    label: { color: colors.textMuted, marginBottom: 6, marginTop: 8, fontWeight: '600' },
-    input: {
-      backgroundColor: colors.bgElevated,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 12,
-      color: colors.text,
-    },
+    toggleLabel: { color: colors.text, fontWeight: '600', fontSize: 13, flex: 1 },
+    actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
     btn: {
       backgroundColor: colors.accent,
-      borderRadius: 12,
-      paddingVertical: 14,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
-      marginTop: 12,
-      minHeight: 50,
       justifyContent: 'center',
+      minHeight: 38,
+      alignSelf: 'flex-start',
+      marginTop: 4,
     },
-    btnText: { color: colors.onAccent, fontWeight: '800' },
+    btnInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    btnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
     secondary: {
-      borderRadius: 12,
-      paddingVertical: 12,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
       alignItems: 'center',
+      justifyContent: 'center',
       borderWidth: 1,
       borderColor: colors.border,
-      marginTop: 10,
+      backgroundColor: colors.bgElevated,
+      minHeight: 38,
+      alignSelf: 'flex-start',
+      marginTop: 4,
     },
-    secondaryText: { color: colors.accent, fontWeight: '700' },
-    hint: { color: colors.textMuted, marginTop: 16, fontSize: 12, lineHeight: 18 },
+    secondaryText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
+    hint: { color: colors.textMuted, marginTop: 12, fontSize: 12, lineHeight: 17 },
     hintInline: {
       color: colors.warn,
-      fontSize: 12,
-      lineHeight: 18,
-      marginBottom: 12,
-      marginTop: -4,
+      fontSize: 11,
+      lineHeight: 16,
+      marginBottom: 8,
+      marginTop: -2,
     },
   });
 }

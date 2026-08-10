@@ -1653,6 +1653,36 @@ app.post('/api/smtp/test', authRequired, requirePerm('settings.edit'), async (re
   }
 });
 
+app.post('/api/email/send', authRequired, async (req, res) => {
+  try {
+    const to = String(req.body?.to || '').trim();
+    const subject = String(req.body?.subject || '').trim();
+    const description = String(req.body?.description || req.body?.text || '').trim();
+    if (!to) return res.status(400).json({ error: 'To address is required' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
+    if (!subject) return res.status(400).json({ error: 'Subject is required' });
+    if (!description) return res.status(400).json({ error: 'Description is required' });
+
+    const result = await sendMail({
+      to,
+      subject,
+      text: description,
+      html: `<pre style="font-family:ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;">${description
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')}</pre>`,
+    });
+    if (result.skipped) {
+      return res.status(400).json({ error: result.reason || 'SMTP not configured' });
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Send failed' });
+  }
+});
+
 // ---------- Email templates ----------
 app.get('/api/email-templates', authRequired, requirePerm('settings.view'), (_req, res) => {
   res.json({

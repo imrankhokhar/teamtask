@@ -250,6 +250,8 @@ export const api = {
   createEtherealSmtp: () => request('/api/smtp/ethereal', { method: 'POST' }),
   testSmtp: (to?: string) =>
     request('/api/smtp/test', { method: 'POST', body: { to } }),
+  sendEmail: (body: { to: string; subject: string; description: string }) =>
+    request('/api/email/send', { method: 'POST', body }),
   getEmailTemplates: () => request('/api/email-templates'),
   saveEmailTemplates: (body: any) =>
     request('/api/email-templates', { method: 'PUT', body }),

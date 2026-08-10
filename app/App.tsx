@@ -22,6 +22,7 @@ import NotificationsScreen from './src/screens/NotificationsScreen';
 import ConnectionScreen from './src/screens/ConnectionScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import FuelCalScreen from './src/screens/FuelCalScreen';
 import { refreshApiUrl } from './src/api';
 import LoadingView from './src/components/LoadingView';
 
@@ -58,6 +59,7 @@ function RootNav() {
             <Stack.Screen name="Users" component={UsersScreen} />
             <Stack.Screen name="Roles" component={RolesScreen} />
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="FuelCal" component={FuelCalScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
