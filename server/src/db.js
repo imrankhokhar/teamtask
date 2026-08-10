@@ -145,6 +145,11 @@ function migrateDb(db) {
         changed = true;
       }
     }
+    const member = db.roles.find((r) => r.id === 'role-member' || r.name === 'Member');
+    if (member && Array.isArray(member.permissions) && !member.permissions.includes('fuel.view')) {
+      member.permissions = [...member.permissions, 'fuel.view'];
+      changed = true;
+    }
   }
   const adminRole = db.roles.find((r) => r.id === 'role-admin' || r.name === 'Admin');
   const memberRole = db.roles.find((r) => r.id === 'role-member' || r.name === 'Member');

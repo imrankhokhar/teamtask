@@ -1778,12 +1778,23 @@ for (const candidate of webCandidates) {
 }
 
 if (webRoot) {
-  app.use(express.static(webRoot));
+  app.use(express.static(webRoot, {
+    // Keep icon fonts / hashed assets from being rewritten to index.html
+    fallthrough: true,
+    setHeaders(res, filePath) {
+      if (/\.ttf$/i.test(filePath)) {
+        res.setHeader('Content-Type', 'font/ttf');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+      }
+    },
+  }));
   app.get('/', (_req, res) => {
     res.sendFile(path.join(webRoot, 'index.html'));
   });
   app.get(/^(?!\/api)(?!\/uploads)(?!\/ws).*/, (req, res, next) => {
     if (req.method !== 'GET') return next();
+    // Don't SPA-fallback real static asset paths (icons/fonts/images)
+    if (/\.[a-z0-9]+$/i.test(req.path)) return next();
     res.sendFile(path.join(webRoot, 'index.html'));
   });
   console.log('Serving web UI from', webRoot);

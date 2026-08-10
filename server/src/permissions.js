@@ -4,6 +4,7 @@ const MODULES = [
   { key: 'users', label: 'Users' },
   { key: 'roles', label: 'Roles & Permissions' },
   { key: 'notifications', label: 'Notifications' },
+  { key: 'fuel', label: 'Fuel Cal' },
   { key: 'settings', label: 'Settings' },
 ];
 
@@ -47,6 +48,7 @@ function createDefaultRoles() {
         'tasks.delete',
         'teams.view',
         'notifications.view',
+        'fuel.view',
         'settings.view',
       ],
       createdAt: new Date().toISOString(),

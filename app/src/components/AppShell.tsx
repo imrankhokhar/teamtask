@@ -68,6 +68,7 @@ const MENU: NavItem[] = [
     label: 'Fuel Cal',
     icon: 'speedometer-outline',
     iconOn: 'speedometer',
+    perm: 'fuel.view',
   },
   {
     key: 'Settings',
