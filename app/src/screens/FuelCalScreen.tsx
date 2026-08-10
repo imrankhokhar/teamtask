@@ -16,6 +16,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import AppShell from '../components/AppShell';
 import FormField from '../components/FormField';
 import { api } from '../api';
+import { useAuth } from '../auth';
 import { useTheme, ThemeColors, spacing } from '../theme';
 
 type Employee = { name: string; dist: number; mil: number };
@@ -40,6 +41,7 @@ function formatMoney(n: number) {
 
 export default function FuelCalScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { user: me } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [priceHike, setPriceHike] = useState('56');
   const [workingDays, setWorkingDays] = useState('22');
@@ -75,14 +77,44 @@ export default function FuelCalScreen({ navigation }: any) {
         setReady(true);
       }
 
+      let list: AppUser[] = [];
       try {
         const data = await api.users();
-        setUsers(data.users || []);
+        list = data.users || [];
       } catch {
-        setUsers([]);
+        list = [];
+      }
+      // Always include signed-in user so members can at least pick themselves
+      if (me?.id && !list.some((u) => u.id === me.id)) {
+        list = [
+          {
+            id: me.id,
+            name: me.name,
+            firstName: me.firstName,
+            lastName: me.lastName,
+            email: me.email,
+          },
+          ...list,
+        ];
+      }
+      setUsers(list);
+
+      const myLabel = me
+        ? userLabel({
+            id: me.id,
+            name: me.name,
+            firstName: me.firstName,
+            lastName: me.lastName,
+            email: me.email,
+          })
+        : '';
+      if (myLabel) {
+        setEmployees((rows) =>
+          rows.map((row) => (row.name ? row : { ...row, name: myLabel }))
+        );
       }
     })();
-  }, []);
+  }, [me]);
 
   useEffect(() => {
     if (!ready) return;

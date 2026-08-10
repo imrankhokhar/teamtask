@@ -576,7 +576,8 @@ app.get('/api/users', authRequired, (req, res) => {
     req.isAdmin ||
     hasPermission(db, req.user, 'users.view') ||
     hasPermission(db, req.user, 'teams.create') ||
-    hasPermission(db, req.user, 'tasks.create');
+    hasPermission(db, req.user, 'tasks.create') ||
+    hasPermission(db, req.user, 'fuel.view');
   if (!canList) return res.status(403).json({ error: 'Missing permission: users.view' });
   const full = req.isAdmin || hasPermission(db, req.user, 'users.view');
   res.json({
