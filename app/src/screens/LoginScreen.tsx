@@ -301,9 +301,9 @@ export default function LoginScreen({ navigation }: any) {
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity onPress={() => navigation.navigate('Connection')}>
+          {/* <TouchableOpacity onPress={() => navigation.navigate('Connection')}>
             <Text style={styles.switch}>Server connection (phone setup)</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

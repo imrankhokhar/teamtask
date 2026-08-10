@@ -21,9 +21,22 @@ import { useTheme, ThemeColors, spacing } from '../theme';
 
 type Employee = { name: string; dist: number; mil: number };
 type AppUser = { id: string; name?: string; firstName?: string; lastName?: string; email?: string };
+type HistoryRow = {
+  id: string;
+  savedAt: string;
+  fuelPrice: number;
+  workDays: number;
+  name: string;
+  dist: number;
+  mil: number;
+  monthly: number;
+  total: number;
+};
 
 const STORAGE_KEY = 'fuel_cal_state_v1';
+const HISTORY_KEY = 'fuel_cal_history_v1';
 const DEFAULT_EMPLOYEES: Employee[] = [{ name: '', dist: 32, mil: 40 }];
+const PAGE_SIZE_OPTIONS = [5, 10, 15] as const;
 
 function userLabel(u: AppUser) {
   const full = `${u.firstName || u.name || ''} ${u.lastName || ''}`.trim();
@@ -58,6 +71,10 @@ export default function FuelCalScreen({ navigation }: any) {
   const [emailMsg, setEmailMsg] = useState('');
   const [emailError, setEmailError] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [pageSize, setPageSize] = useState<number>(10);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     (async () => {
@@ -73,6 +90,16 @@ export default function FuelCalScreen({ navigation }: any) {
         }
       } catch {
         // keep defaults
+      }
+
+      try {
+        const histRaw = await AsyncStorage.getItem(HISTORY_KEY);
+        if (histRaw) {
+          const parsed = JSON.parse(histRaw);
+          if (Array.isArray(parsed)) setHistory(parsed);
+        }
+      } catch {
+        // ignore
       } finally {
         setReady(true);
       }
@@ -146,11 +173,57 @@ export default function FuelCalScreen({ navigation }: any) {
     ).catch(() => undefined);
   }, [priceHike, workingDays, employees, ready]);
 
+  useEffect(() => {
+    if (!ready) return;
+    AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history)).catch(() => undefined);
+  }, [history, ready]);
+
   const hike = parseFloat(priceHike) || 0;
   const days = parseFloat(workingDays) || 0;
   const impacts = employees.map((e) => monthlyImpact(e, hike, days));
   const total = impacts.reduce((a, b) => a + b, 0);
   const userNames = users.map(userLabel).filter(Boolean);
+
+  const totalPages = Math.max(1, Math.ceil(history.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = history.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, Math.max(1, Math.ceil(history.length / pageSize) || 1)));
+  }, [history.length, pageSize]);
+
+  function saveHistorySnapshot() {
+    const savedAt = new Date().toISOString();
+    const batchId = `${Date.now()}`;
+    const rows: HistoryRow[] = employees.map((emp, i) => ({
+      id: `${batchId}-${i}`,
+      savedAt,
+      fuelPrice: hike,
+      workDays: days,
+      name: emp.name || '—',
+      dist: emp.dist,
+      mil: emp.mil,
+      monthly: impacts[i] || 0,
+      total,
+    }));
+    setHistory((prev) => [...rows, ...prev].slice(0, 500));
+    setPage(1);
+  }
+
+  function formatHistoryDate(iso: string) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch {
+      return iso;
+    }
+  }
 
   function updateEmp(index: number, field: keyof Employee, value: string) {
     setEmployees((list) =>
@@ -268,7 +341,8 @@ export default function FuelCalScreen({ navigation }: any) {
       } else {
         await Share.share({ message: tableText });
       }
-      setCopyStatus('Text ready to paste!');
+      saveHistorySnapshot();
+      setCopyStatus('Saved to history & ready to paste!');
       setTimeout(() => setCopyStatus(''), 2500);
     } catch {
       setCopyStatus('Copy failed');
@@ -417,10 +491,216 @@ export default function FuelCalScreen({ navigation }: any) {
             <Text style={styles.totalsValue}>PKR {formatMoney(total)}</Text>
           </View>
 
-          <TouchableOpacity style={styles.emailBtn} onPress={openEmailModal}>
-            <Ionicons name="mail-outline" size={16} color={colors.onAccent} />
-            <Text style={styles.emailBtnText}>Send Calculation via Email</Text>
-          </TouchableOpacity>
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.emailBtn} onPress={openEmailModal}>
+              <Ionicons name="mail-outline" size={16} color={colors.onAccent} />
+              <Text style={styles.emailBtnText}>Send Calculation via Email</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.historyBtn, historyOpen && styles.historyBtnOn]}
+              onPress={() => setHistoryOpen((v) => !v)}
+            >
+              <Ionicons
+                name="time-outline"
+                size={16}
+                color={historyOpen ? colors.onAccent : colors.accent}
+              />
+              <Text style={[styles.historyBtnText, historyOpen && styles.historyBtnTextOn]}>
+                History
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {historyOpen ? (
+            <View style={styles.historySection}>
+              <View style={styles.historyToolbar}>
+                <Text style={styles.historyTitle}>Calculation history</Text>
+                <View style={styles.pageSizeWrap}>
+                  <Text style={styles.label}>Per page</Text>
+                  {Platform.OS === 'web' ? (
+                    // @ts-expect-error web select
+                    <select
+                      value={String(pageSize)}
+                      onChange={(e: any) => {
+                        setPageSize(Number(e.target.value) || 10);
+                        setPage(1);
+                      }}
+                      style={{
+                        height: 34,
+                        minWidth: 72,
+                        padding: '0 8px',
+                        borderRadius: 8,
+                        backgroundColor: colors.bgElevated,
+                        color: colors.text,
+                        border: `1px solid ${colors.border}`,
+                      }}
+                    >
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <View style={styles.pageSizeChips}>
+                      {PAGE_SIZE_OPTIONS.map((n) => (
+                        <TouchableOpacity
+                          key={n}
+                          style={[styles.pageSizeChip, pageSize === n && styles.pageSizeChipOn]}
+                          onPress={() => {
+                            setPageSize(n);
+                            setPage(1);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.pageSizeChipText,
+                              pageSize === n && styles.pageSizeChipTextOn,
+                            ]}
+                          >
+                            {n}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator>
+                <View style={[styles.tableCard, styles.historyTable]}>
+                  <View style={styles.tableHead}>
+                    <View style={[styles.cell, styles.colDate]}>
+                      <Text style={styles.th}>Date</Text>
+                    </View>
+                    <View style={[styles.cell, styles.colName]}>
+                      <Text style={styles.th}>Name</Text>
+                    </View>
+                    <View style={[styles.cell, styles.colNum]}>
+                      <Text style={styles.th}>Fuel Price</Text>
+                    </View>
+                    <View style={[styles.cell, styles.colNum]}>
+                      <Text style={styles.th}>Work Days</Text>
+                    </View>
+                    <View style={[styles.cell, styles.colNum]}>
+                      <Text style={styles.th}>Distance</Text>
+                    </View>
+                    <View style={[styles.cell, styles.colNum]}>
+                      <Text style={styles.th}>Mileage</Text>
+                    </View>
+                    <View style={[styles.cell, styles.colCost]}>
+                      <Text style={[styles.th, styles.thRight]}>Monthly</Text>
+                    </View>
+                    <View style={[styles.cell, styles.colCost, styles.cellLast]}>
+                      <Text style={[styles.th, styles.thRight]}>Total</Text>
+                    </View>
+                  </View>
+
+                  {pageRows.map((row, index) => (
+                    <View
+                      key={row.id}
+                      style={[
+                        styles.tableRow,
+                        index === pageRows.length - 1 && styles.tableRowLast,
+                      ]}
+                    >
+                      <View style={[styles.cell, styles.colDate]}>
+                        <Text style={styles.histCell}>{formatHistoryDate(row.savedAt)}</Text>
+                      </View>
+                      <View style={[styles.cell, styles.colName]}>
+                        <Text style={styles.histCell} numberOfLines={1}>
+                          {row.name}
+                        </Text>
+                      </View>
+                      <View style={[styles.cell, styles.colNum]}>
+                        <Text style={styles.histCell}>{row.fuelPrice}</Text>
+                      </View>
+                      <View style={[styles.cell, styles.colNum]}>
+                        <Text style={styles.histCell}>{row.workDays}</Text>
+                      </View>
+                      <View style={[styles.cell, styles.colNum]}>
+                        <Text style={styles.histCell}>{row.dist}</Text>
+                      </View>
+                      <View style={[styles.cell, styles.colNum]}>
+                        <Text style={styles.histCell}>{row.mil}</Text>
+                      </View>
+                      <View style={[styles.cell, styles.colCost]}>
+                        <Text style={[styles.histCell, styles.thRight]}>
+                          {formatMoney(row.monthly)}
+                        </Text>
+                      </View>
+                      <View style={[styles.cell, styles.colCost, styles.cellLast]}>
+                        <Text style={[styles.histCell, styles.thRight, styles.histTotal]}>
+                          {formatMoney(row.total)}
+                        </Text>
+                      </View>
+                    </View>
+                  ))}
+
+                  {!history.length && (
+                    <Text style={styles.empty}>No history yet. Use Copy Data to save a record.</Text>
+                  )}
+                </View>
+              </ScrollView>
+
+              {history.length > pageSize ? (
+                <View style={styles.pager}>
+                  <Text style={styles.pagerInfo}>
+                    {(safePage - 1) * pageSize + 1}–
+                    {Math.min(safePage * pageSize, history.length)} of {history.length}
+                  </Text>
+                  <View style={styles.pagerBtns}>
+                    <TouchableOpacity
+                      style={[styles.pagerBtn, safePage <= 1 && styles.miniDisabled]}
+                      disabled={safePage <= 1}
+                      onPress={() => setPage((p) => Math.max(1, p - 1))}
+                    >
+                      <Ionicons name="chevron-back" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((n) => {
+                        if (totalPages <= 7) return true;
+                        return (
+                          n === 1 ||
+                          n === totalPages ||
+                          Math.abs(n - safePage) <= 1
+                        );
+                      })
+                      .map((n, idx, arr) => {
+                        const prev = arr[idx - 1];
+                        const showGap = prev != null && n - prev > 1;
+                        return (
+                          <React.Fragment key={n}>
+                            {showGap ? <Text style={styles.pagerGap}>…</Text> : null}
+                            <TouchableOpacity
+                              style={[styles.pageNum, n === safePage && styles.pageNumOn]}
+                              onPress={() => setPage(n)}
+                            >
+                              <Text
+                                style={[styles.pageNumText, n === safePage && styles.pageNumTextOn]}
+                              >
+                                {n}
+                              </Text>
+                            </TouchableOpacity>
+                          </React.Fragment>
+                        );
+                      })}
+                    <TouchableOpacity
+                      style={[styles.pagerBtn, safePage >= totalPages && styles.miniDisabled]}
+                      disabled={safePage >= totalPages}
+                      onPress={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    >
+                      <Ionicons name="chevron-forward" size={18} color={colors.text} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : history.length > 0 ? (
+                <Text style={styles.pagerInfo}>
+                  {history.length} record{history.length === 1 ? '' : 's'}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -681,6 +961,80 @@ function makeStyles(colors: ThemeColors) {
       alignSelf: 'flex-start',
     },
     emailBtnText: { color: colors.onAccent, fontWeight: '800', fontSize: spacing.btnFont },
+    actionRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10 },
+    historyBtn: {
+      backgroundColor: colors.bgCard,
+      borderRadius: spacing.btnRadius,
+      paddingVertical: spacing.btnPadV,
+      paddingHorizontal: spacing.btnPadH,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minHeight: 42,
+    },
+    historyBtnOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    historyBtnText: { color: colors.accent, fontWeight: '800', fontSize: spacing.btnFont },
+    historyBtnTextOn: { color: colors.onAccent },
+    historySection: { gap: 10 },
+    historyToolbar: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+    },
+    historyTitle: { color: colors.text, fontWeight: '800', fontSize: 16 },
+    pageSizeWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    pageSizeChips: { flexDirection: 'row', gap: 6 },
+    pageSizeChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.bgElevated,
+    },
+    pageSizeChipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    pageSizeChipText: { color: colors.text, fontWeight: '700', fontSize: 13 },
+    pageSizeChipTextOn: { color: colors.onAccent },
+    historyTable: { minWidth: 860 },
+    colDate: { width: 150, minWidth: 150 },
+    histCell: { color: colors.text, fontSize: 12 },
+    histTotal: { fontWeight: '800', color: colors.accent },
+    miniDisabled: { opacity: 0.35 },
+    pager: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    pagerInfo: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+    pagerBtns: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
+    pagerBtn: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 8,
+      padding: 6,
+      backgroundColor: colors.bgElevated,
+    },
+    pageNum: {
+      minWidth: 32,
+      height: 32,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 8,
+      backgroundColor: colors.bgElevated,
+    },
+    pageNumOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    pageNumText: { color: colors.text, fontWeight: '700', fontSize: 13 },
+    pageNumTextOn: { color: colors.onAccent },
+    pagerGap: { color: colors.textMuted, paddingHorizontal: 4 },
     emailModalCard: {
       backgroundColor: colors.bgCard,
       borderRadius: 14,
