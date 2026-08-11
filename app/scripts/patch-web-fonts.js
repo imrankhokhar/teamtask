@@ -35,9 +35,23 @@ function main() {
       '</style>',
     ].join('');
     html = html.replace('</head>', `${inject}</head>`);
-    fs.writeFileSync(indexHtml, html);
   }
-  console.log('Patched web fonts ->', distFont);
+  if (!html.includes('rel="manifest"')) {
+    const pwa = [
+      '<link rel="manifest" href="/manifest.json" />',
+      '<meta name="mobile-web-app-capable" content="yes" />',
+      '<meta name="apple-mobile-web-app-capable" content="yes" />',
+      '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
+      '<meta name="apple-mobile-web-app-title" content="TeamTask" />',
+      '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+    ].join('');
+    html = html.replace('</head>', `${pwa}</head>`);
+  }
+  if (!html.includes('pwa-register.js')) {
+    html = html.replace('</body>', '<script src="/pwa-register.js" defer></script></body>');
+  }
+  fs.writeFileSync(indexHtml, html);
+  console.log('Patched web fonts + PWA ->', distFont);
 }
 
 main();

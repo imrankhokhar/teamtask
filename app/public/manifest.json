@@ -1,0 +1,27 @@
+{
+  "id": "/",
+  "name": "TeamTask",
+  "short_name": "TeamTask",
+  "description": "Shared team tasks, checklists, and notifications",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F1C17",
+  "theme_color": "#0F1C17",
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

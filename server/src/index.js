@@ -1831,8 +1831,9 @@ if (webRoot) {
   });
   app.get(/^(?!\/api)(?!\/uploads)(?!\/ws).*/, (req, res, next) => {
     if (req.method !== 'GET') return next();
-    // Don't SPA-fallback real static asset paths (icons/fonts/images)
+    // Don't SPA-fallback real static asset paths (icons/fonts/images/PWA)
     if (/\.[a-z0-9]+$/i.test(req.path)) return next();
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(webRoot, 'index.html'));
   });
   console.log('Serving web UI from', webRoot);

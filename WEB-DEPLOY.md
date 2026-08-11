@@ -89,14 +89,16 @@ First open on free plan can take **30–60 seconds**.
 2. Login: `admin@teamtask.local` / `admin123`
 3. Optional: browser menu → **Install TeamTask** / **Create shortcut**.
 
-### Mobile
-1. Open the **same URL** in Chrome (Android) or Safari (iPhone).
+### Mobile (install as an app — same URL as the website)
+1. Open the **same server URL** in Chrome (Android) or Safari (iPhone).
 2. Login with the same account.
-3. Optional:
-   - Android Chrome → **Add to Home screen**
+3. Install:
+   - Android Chrome → menu → **Add to Home screen** / **Install app**
    - iPhone Safari → Share → **Add to Home Screen**
 
-Then it opens full-screen like a native app, but it’s still the web app (shared data).
+The home-screen icon is the **same live web app**. After you `git push` and the server is rebuilt/restarted, pull-to-refresh (or reopen the icon) shows the new UI on **desktop and phone** — no Play Store / App Store rebuild.
+
+> A store-built native APK/IPA would **not** auto-update on git push. This PWA wrap does, because it always loads from the server.
 
 ---
 
