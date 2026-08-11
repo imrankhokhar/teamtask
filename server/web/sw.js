@@ -1,5 +1,6 @@
-/* TeamTask PWA — network-first so git/server deploys show up on phone + desktop. */
-const CACHE = 'teamtask-pwa-v1';
+/* build 1786444595923 */
+/* TeamTask PWA — never cache HTML/SW so deploys show without a server purge. */
+const CACHE = 'teamtask-pwa-v2';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -10,11 +11,18 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+      await Promise.all(keys.map((k) => caches.delete(k)));
       await self.clients.claim();
     })()
   );
 });
+
+function isUncachedPath(pathname) {
+  if (pathname === '/' || pathname === '/index.html') return true;
+  if (pathname === '/sw.js' || pathname === '/manifest.json' || pathname === '/pwa-register.js') return true;
+  if (pathname.endsWith('.html')) return true;
+  return false;
+}
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -25,24 +33,21 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (req.mode === 'navigate' || isUncachedPath(url.pathname)) {
+    event.respondWith(fetch(req, { cache: 'no-store' }));
+    return;
+  }
+
   event.respondWith(
     (async () => {
-      try {
-        const fresh = await fetch(req);
-        if (fresh && fresh.ok) {
-          const copy = fresh.clone();
-          caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => undefined);
-        }
-        return fresh;
-      } catch {
-        const cached = await caches.match(req);
-        if (cached) return cached;
-        if (req.mode === 'navigate') {
-          const home = await caches.match('/');
-          if (home) return home;
-        }
-        throw new Error('offline');
+      const cached = await caches.match(req);
+      if (cached) return cached;
+      const fresh = await fetch(req);
+      if (fresh && fresh.ok && /\.[a-f0-9]{8,}\./i.test(url.pathname)) {
+        const copy = fresh.clone();
+        caches.open(CACHE).then((cache) => cache.put(req, copy)).catch(() => undefined);
       }
+      return fresh;
     })()
   );
 });

@@ -1783,6 +1783,12 @@ for (const candidate of webCandidates) {
   }
 }
 
+function noStore(res) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+}
+
 if (webRoot) {
   // Nginx-safe flat font path (public/fonts copied into web root on export)
   app.get('/fonts/:file', (req, res, next) => {
@@ -1817,23 +1823,36 @@ if (webRoot) {
 
   app.use(
     express.static(webRoot, {
+      etag: false,
+      lastModified: false,
       fallthrough: true,
       setHeaders(res, filePath) {
+        const name = path.basename(filePath);
+        if (/^(index\.html|sw\.js|manifest\.json|pwa-register\.js)$/i.test(name)) {
+          noStore(res);
+          return;
+        }
         if (/\.ttf$/i.test(filePath)) {
           res.setHeader('Content-Type', 'font/ttf');
           res.setHeader('Access-Control-Allow-Origin', '*');
+        }
+        if (/\.[a-f0-9]{8,}\./i.test(name) || /\.ttf$/i.test(name)) {
+          res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        } else {
+          noStore(res);
         }
       },
     })
   );
   app.get('/', (_req, res) => {
+    noStore(res);
     res.sendFile(path.join(webRoot, 'index.html'));
   });
   app.get(/^(?!\/api)(?!\/uploads)(?!\/ws).*/, (req, res, next) => {
     if (req.method !== 'GET') return next();
     // Don't SPA-fallback real static asset paths (icons/fonts/images/PWA)
     if (/\.[a-z0-9]+$/i.test(req.path)) return next();
-    res.setHeader('Cache-Control', 'no-cache');
+    noStore(res);
     res.sendFile(path.join(webRoot, 'index.html'));
   });
   console.log('Serving web UI from', webRoot);

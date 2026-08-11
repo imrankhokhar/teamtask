@@ -62,6 +62,22 @@ function main() {
   if (!html.includes('pwa-register.js')) {
     html = html.replace('</body>', '<script src="/pwa-register.js" defer></script></body>');
   }
+  const build = String(Date.now());
+  const distSw = path.join(dist, 'sw.js');
+  const distReg = path.join(dist, 'pwa-register.js');
+  if (fs.existsSync(distReg)) {
+    let reg = fs.readFileSync(distReg, 'utf8');
+    reg = reg.replace(/__BUILD__/g, build);
+    fs.writeFileSync(distReg, reg);
+  }
+  if (fs.existsSync(distSw)) {
+    let sw = fs.readFileSync(distSw, 'utf8');
+    if (!sw.includes(build)) {
+      sw = `/* build ${build} */\n` + sw;
+      fs.writeFileSync(distSw, sw);
+    }
+  }
+
   fs.writeFileSync(indexHtml, html);
   console.log('Patched web fonts + PWA ->', distFont);
 }
