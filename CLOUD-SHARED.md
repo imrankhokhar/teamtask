@@ -27,7 +27,7 @@ Everyone installs the same EXE. All devices use **one cloud server**, so teams/t
    - `MONGODB_URI` = your Atlas URI  
    - `JWT_SECRET` = any long random string  
    - `NODE_ENV` = `production`
-6. Deploy → copy the public URL, e.g. `https://teamtask-xxxx.onrender.com`
+6. Live URL: `https://tt.exodevs.com`
 
 > First open may take ~30–60s on the free plan (cold start).
 
@@ -37,7 +37,7 @@ Everyone installs the same EXE. All devices use **one cloud server**, so teams/t
 
 ```json
 {
-  "apiUrl": "https://teamtask-xxxx.onrender.com"
+  "apiUrl": "https://tt.exodevs.com"
 }
 ```
 

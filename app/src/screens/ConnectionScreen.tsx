@@ -99,7 +99,7 @@ export default function ConnectionScreen({ navigation }: any) {
           value={url}
           onChangeText={setUrl}
           autoCapitalize="none"
-          placeholder="https://your-app.onrender.com"
+          placeholder="https://tt.exodevs.com"
           keyboardType="url"
         />
 

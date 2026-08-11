@@ -6,7 +6,7 @@ You do **not** buy a server or domain. Use free accounts:
 |------|----------------|------|
 | Website + API | [Render.com](https://render.com) | Free |
 | Database | [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) | Free |
-| Domain | `https://something.onrender.com` | Free (enough) |
+| Domain | `https://tt.exodevs.com` | Live TeamTask URL |
 | App install feel | Browser “Add to Home Screen / Install” | Free |
 
 After this, open the link on **phone and PC** — same shared data.
@@ -76,7 +76,7 @@ If Git asks you to login, sign in with GitHub.
 | `NODE_ENV` | `production` |
 
 6. Click **Create Web Service** and wait until **Live**.
-7. Copy your URL, like: `https://teamtask-xxxx.onrender.com`
+7. Live site: **https://tt.exodevs.com**
 
 First open on free plan can take **30–60 seconds**.
 
@@ -85,12 +85,12 @@ First open on free plan can take **30–60 seconds**.
 ## Part D — Use it like an app
 
 ### Desktop
-1. Open the Render URL in Chrome/Edge.
-2. Login: `admin@teamtask.local` / `admin123`
+1. Open **https://tt.exodevs.com** in Chrome/Edge.
+2. Login with your TeamTask account.
 3. Optional: browser menu → **Install TeamTask** / **Create shortcut**.
 
 ### Mobile (install as an app — same URL as the website)
-1. Open the **same server URL** in Chrome (Android) or Safari (iPhone).
+1. Open **https://tt.exodevs.com** in Chrome (Android) or Safari (iPhone).
 2. Login with the same account.
 3. Install:
    - Android Chrome → menu → **Add to Home screen** / **Install app**

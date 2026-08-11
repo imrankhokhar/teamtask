@@ -11,7 +11,7 @@ Follow **[WEB-DEPLOY.md](WEB-DEPLOY.md)** step by step:
 1. Free Postgres (Neon) — paste `DATABASE_URL` (see **[POSTGRES-SETUP.md](POSTGRES-SETUP.md)**)  
 2. Free GitHub (code)  
 3. Free Render (website + API)  
-4. Open the `https://….onrender.com` link on mobile and desktop  
+4. Open **https://tt.exodevs.com** on mobile and desktop  
 5. Optional: **Add to Home Screen / Install** for an app-like icon  
 
 Demo login after first deploy: `admin@teamtask.local` / `admin123`
