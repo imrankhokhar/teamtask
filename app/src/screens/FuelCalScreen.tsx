@@ -814,8 +814,8 @@ export default function FuelCalScreen({ navigation }: any) {
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    inner: { padding: 12, paddingBottom: 40, width: '100%' },
-    wrap: { width: '100%', maxWidth: 960, gap: 12, alignSelf: 'stretch' },
+    inner: { padding: 12, paddingBottom: 40, width: '100%', maxWidth: '100%' },
+    wrap: { width: '100%', maxWidth: '100%', gap: 12, alignSelf: 'stretch' },
     h1: { color: colors.text, fontSize: 22, fontWeight: '800' },
     config: {
       flexDirection: 'row',

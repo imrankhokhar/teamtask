@@ -13,7 +13,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors, spacing } from '../theme';
+import { useTheme, ThemeColors, spacing, listCardLayout } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
@@ -374,9 +374,7 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      width: spacing.cardWidth,
-      flexGrow: 1,
-      maxWidth: '100%',
+      ...listCardLayout,
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     metaLabel: {

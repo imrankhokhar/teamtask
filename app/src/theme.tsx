@@ -100,6 +100,14 @@ export const spacing = {
   labelFont: 12,
 };
 
+export const listCardLayout = {
+  flexGrow: 1,
+  flexShrink: 1,
+  flexBasis: 260,
+  maxWidth: '100%' as const,
+  minWidth: 0,
+};
+
 /** @deprecated Prefer useTheme().colors — kept for gradual migration */
 export let colors: ThemeColors = { ...darkColors };
 

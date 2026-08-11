@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
-import { useTheme, ThemeColors, spacing } from '../theme';
+import { useTheme, ThemeColors, spacing, listCardLayout } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -119,9 +119,7 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      width: spacing.cardWidth,
-      flexGrow: 1,
-      maxWidth: '100%',
+      ...listCardLayout,
     },
     unread: { borderColor: colors.accent },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },

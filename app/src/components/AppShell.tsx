@@ -12,6 +12,7 @@ import {
   Modal,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth';
 import { useTheme, ThemeColors } from '../theme';
 import { getApiBaseUrlSyncFallback } from '../api';
@@ -120,11 +121,13 @@ export default function AppShell({
   const { user, logout, can, settings } = useAuth();
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const isPhone = width < 768;
   const [expanded, setExpanded] = useState(true);
+  const collapsed = !expanded;
   const styles = useMemo(
-    () => makeStyles(colors, { isPhone, expanded, width }),
-    [colors, isPhone, expanded, width]
+    () => makeStyles(colors, { isPhone, expanded, width, topInset: insets.top }),
+    [colors, isPhone, expanded, width, insets.top]
   );
   const items = MENU.filter((m) => !m.perm || can(m.perm));
   const [menuOpen, setMenuOpen] = useState(false);
@@ -154,15 +157,15 @@ export default function AppShell({
           </Text>
         ) : null}
         <TouchableOpacity
-          style={styles.collapseBtn}
+          style={styles.radioHit}
           onPress={() => setExpanded((v) => !v)}
-          accessibilityLabel={expanded ? 'Collapse menu' : 'Expand menu'}
+          accessibilityRole="radio"
+          accessibilityState={{ checked: collapsed }}
+          accessibilityLabel={collapsed ? 'Show menu names' : 'Hide menu names'}
         >
-          <Ionicons
-            name={expanded ? 'chevron-back-outline' : 'chevron-forward-outline'}
-            size={18}
-            color={colors.text}
-          />
+          <View style={[styles.radioOuter, collapsed && styles.radioOuterOn]}>
+            {collapsed ? <View style={styles.radioInner} /> : null}
+          </View>
         </TouchableOpacity>
       </View>
       <ScrollView
@@ -272,13 +275,14 @@ export default function AppShell({
 
 function makeStyles(
   colors: ThemeColors,
-  opts: { isPhone: boolean; expanded: boolean; width: number }
+  opts: { isPhone: boolean; expanded: boolean; width: number; topInset: number }
 ) {
-  const { isPhone, expanded, width } = opts;
-  const openW = isPhone ? Math.min(260, Math.max(220, width * 0.82)) : 232;
-  const railW = 64;
+  const { isPhone, expanded, width, topInset } = opts;
+  const openW = isPhone ? Math.min(240, Math.max(200, width * 0.78)) : 232;
+  const railW = 56;
   const sidebarW = expanded ? openW : railW;
   const overlay = isPhone && expanded;
+  const safeTop = Math.max(topInset || 0, Platform.OS === 'web' ? 10 : 12);
 
   return StyleSheet.create({
     root: {
@@ -287,6 +291,7 @@ function makeStyles(
       flexDirection: 'row',
       width: '100%',
       maxWidth: '100%',
+      overflow: 'hidden',
     },
     dim: {
       ...StyleSheet.absoluteFillObject,
@@ -294,12 +299,12 @@ function makeStyles(
       zIndex: 20,
     },
     sidebar: {
-      width: overlay ? openW : sidebarW,
+      width: overlay ? railW : sidebarW,
       backgroundColor: colors.bgElevated,
       borderRightWidth: 1,
       borderRightColor: colors.border,
-      paddingTop: Platform.OS === 'web' ? 12 : 44,
-      paddingHorizontal: expanded ? 10 : 8,
+      paddingTop: safeTop,
+      paddingHorizontal: expanded ? 10 : 6,
       paddingBottom: 12,
       zIndex: 30,
     },
@@ -308,6 +313,7 @@ function makeStyles(
       left: 0,
       top: 0,
       bottom: 0,
+      width: openW,
       height: '100%',
       shadowColor: '#000',
       shadowOpacity: 0.25,
@@ -330,16 +336,29 @@ function makeStyles(
       flex: 1,
       minWidth: 0,
     },
-    collapseBtn: {
+    radioHit: {
       marginLeft: 'auto',
-      width: 32,
-      height: 32,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.bgCard,
+      width: 28,
+      height: 28,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    radioOuter: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      borderWidth: 2,
+      borderColor: colors.text,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'transparent',
+    },
+    radioOuterOn: { borderColor: colors.accent },
+    radioInner: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.accent,
     },
     navScroll: { flex: 1 },
     navScrollInner: { gap: 2, paddingVertical: 6 },
@@ -363,10 +382,11 @@ function makeStyles(
       gap: 10,
     },
     logoutText: { color: colors.danger, fontWeight: '700', fontSize: 13 },
-    content: { flex: 1, minWidth: 0 },
+    content: { flex: 1, minWidth: 0, overflow: 'hidden' },
     contentHeader: {
-      paddingHorizontal: isPhone ? 12 : 16,
-      paddingVertical: 10,
+      paddingHorizontal: isPhone ? 10 : 16,
+      paddingTop: overlay ? safeTop : 10,
+      paddingBottom: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
       backgroundColor: colors.bg,
@@ -417,7 +437,7 @@ function makeStyles(
     },
     avatarImg: { width: 34, height: 34 },
     avatarText: { color: colors.accent, fontWeight: '800', fontSize: 12 },
-    contentBody: { flex: 1, minWidth: 0 },
+    contentBody: { flex: 1, minWidth: 0, overflow: 'hidden' },
     menuBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,

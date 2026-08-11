@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, statusLabel } from '../api';
-import { useTheme, ThemeColors, statusColors, spacing } from '../theme';
+import { useTheme, ThemeColors, statusColors, spacing, listCardLayout } from '../theme';
 import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
@@ -78,7 +78,9 @@ export default function TasksScreen({ navigation }: any) {
                       { backgroundColor: statusColors[item.status] || colors.textMuted },
                     ]}
                   >
-                    <Text style={styles.badgeText}>{statusLabel(item.status)}</Text>
+                    <Text style={styles.badgeText} numberOfLines={1}>
+                    {statusLabel(item.status)}
+                  </Text>
                   </View>
                 </View>
                 <Text style={styles.meta} numberOfLines={1}>
@@ -165,9 +167,10 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.cardGap,
-      padding: 16,
+      padding: 12,
       paddingBottom: 100,
       alignItems: 'flex-start',
+      width: '100%',
     },
     card: {
       backgroundColor: colors.bgCard,
@@ -175,13 +178,28 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      width: spacing.cardWidth,
-      maxWidth: '100%',
-      flexGrow: 1,
+      ...listCardLayout,
     },
-    row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'center' },
-    cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700', flex: 1 },
-    badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+    row: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      gap: 8,
+      alignItems: 'center',
+    },
+    cardTitle: {
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: '700',
+      flex: 1,
+      minWidth: 0,
+    },
+    badge: {
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      flexShrink: 1,
+      maxWidth: '42%',
+    },
     badgeText: {
       color: colors.onAccent,
       fontSize: 11,

@@ -42,6 +42,12 @@ function main() {
       'width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover'
     );
   }
+  if (!html.includes('overflow-x:hidden')) {
+    html = html.replace(
+      '</head>',
+      '<style>html,body,#root{max-width:100%;overflow-x:hidden;box-sizing:border-box}</style></head>'
+    );
+  }
   if (!html.includes('rel="manifest"')) {
     const pwa = [
       '<link rel="manifest" href="/manifest.json" />',
