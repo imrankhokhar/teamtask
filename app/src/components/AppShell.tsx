@@ -119,42 +119,56 @@ export default function AppShell({
 }) {
   const { user, logout, can, settings } = useAuth();
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { width } = useWindowDimensions();
-  const sidebarWide = width >= 900 || Platform.OS === 'web';
+  const isPhone = width < 768;
+  const [expanded, setExpanded] = useState(true);
+  const styles = useMemo(
+    () => makeStyles(colors, { isPhone, expanded, width }),
+    [colors, isPhone, expanded, width]
+  );
   const items = MENU.filter((m) => !m.perm || can(m.perm));
   const [menuOpen, setMenuOpen] = useState(false);
   const photo = resolveUrl(user?.avatarUrl);
   const logo = resolveUrl(settings?.logoUrl);
   const appName = settings?.appName || 'TeamTask';
   const tip = info || MODULE_INFO[active] || '';
+  const overlay = isPhone && expanded;
 
   function go(screen: string) {
     setMenuOpen(false);
+    if (isPhone) setExpanded(false);
     navigation.navigate(screen);
   }
 
   const sidebar = (
-    <View style={[styles.sidebar, !sidebarWide && styles.sidebarCompact]}>
+    <View style={[styles.sidebar, overlay && styles.sidebarOverlay]}>
       <View style={styles.brandRow}>
         {logo ? (
           <Image source={{ uri: logo }} style={styles.brandLogo} resizeMode="contain" />
         ) : (
           <Ionicons name="layers" size={20} color={colors.accent} />
         )}
-        <Text style={styles.brand} numberOfLines={1}>
-          {appName}
-        </Text>
+        {expanded ? (
+          <Text style={styles.brand} numberOfLines={1}>
+            {appName}
+          </Text>
+        ) : null}
+        <TouchableOpacity
+          style={styles.collapseBtn}
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityLabel={expanded ? 'Collapse menu' : 'Expand menu'}
+        >
+          <Ionicons
+            name={expanded ? 'chevron-back-outline' : 'chevron-forward-outline'}
+            size={18}
+            color={colors.text}
+          />
+        </TouchableOpacity>
       </View>
       <ScrollView
-        style={{ flex: sidebarWide ? 1 : undefined }}
-        horizontal={!sidebarWide}
-        contentContainerStyle={
-          sidebarWide
-            ? { gap: 2, paddingVertical: 8 }
-            : { gap: 6, paddingVertical: 4, flexDirection: 'row' }
-        }
-        showsHorizontalScrollIndicator={false}
+        style={styles.navScroll}
+        contentContainerStyle={styles.navScrollInner}
+        showsVerticalScrollIndicator={false}
       >
         {items.map((item) => {
           const on = active === item.key;
@@ -162,26 +176,32 @@ export default function AppShell({
           return (
             <TouchableOpacity
               key={item.key}
-              style={[styles.navItem, on && styles.navItemOn]}
-              onPress={() => navigation.navigate(item.key)}
+              style={[styles.navItem, on && styles.navItemOn, !expanded && styles.navItemIcon]}
+              onPress={() => go(item.key)}
+              accessibilityLabel={item.label}
             >
-              <Ionicons name={on ? item.iconOn : item.icon} size={18} color={color} />
-              <Text style={[styles.navText, on && styles.navTextOn]}>{item.label}</Text>
+              <Ionicons name={on ? item.iconOn : item.icon} size={20} color={color} />
+              {expanded ? (
+                <Text style={[styles.navText, on && styles.navTextOn]} numberOfLines={1}>
+                  {item.label}
+                </Text>
+              ) : null}
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-      {sidebarWide ? (
-        <TouchableOpacity onPress={logout} style={styles.logout}>
-          <Ionicons name="log-out-outline" size={18} color={colors.danger} />
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
-      ) : null}
+      <TouchableOpacity onPress={logout} style={[styles.logout, !expanded && styles.navItemIcon]}>
+        <Ionicons name="log-out-outline" size={20} color={colors.danger} />
+        {expanded ? <Text style={styles.logoutText}>Logout</Text> : null}
+      </TouchableOpacity>
     </View>
   );
 
   return (
-    <View style={[styles.root, sidebarWide ? styles.row : styles.col]}>
+    <View style={styles.root}>
+      {overlay ? (
+        <Pressable style={styles.dim} onPress={() => setExpanded(false)} />
+      ) : null}
       {sidebar}
       <View style={styles.content}>
         <View style={styles.contentHeader}>
@@ -196,9 +216,11 @@ export default function AppShell({
             onPress={() => setMenuOpen(true)}
             activeOpacity={0.85}
           >
-            <Text style={styles.userName} numberOfLines={1}>
-              {user?.name || 'Account'}
-            </Text>
+            {!isPhone ? (
+              <Text style={styles.userName} numberOfLines={1}>
+                {user?.name || 'Account'}
+              </Text>
+            ) : null}
             <View style={styles.avatar}>
               {photo ? (
                 <Image source={{ uri: photo }} style={styles.avatarImg} />
@@ -248,56 +270,93 @@ export default function AppShell({
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(
+  colors: ThemeColors,
+  opts: { isPhone: boolean; expanded: boolean; width: number }
+) {
+  const { isPhone, expanded, width } = opts;
+  const openW = isPhone ? Math.min(260, Math.max(220, width * 0.82)) : 232;
+  const railW = 64;
+  const sidebarW = expanded ? openW : railW;
+  const overlay = isPhone && expanded;
+
   return StyleSheet.create({
-    root: { flex: 1, backgroundColor: colors.bg },
-    row: { flexDirection: 'row' },
-    col: { flexDirection: 'column' },
+    root: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      flexDirection: 'row',
+      width: '100%',
+      maxWidth: '100%',
+    },
+    dim: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: colors.overlay,
+      zIndex: 20,
+    },
     sidebar: {
-      width: 220,
+      width: overlay ? openW : sidebarW,
       backgroundColor: colors.bgElevated,
       borderRightWidth: 1,
       borderRightColor: colors.border,
-      paddingTop: Platform.OS === 'web' ? 16 : 44,
-      paddingHorizontal: 10,
+      paddingTop: Platform.OS === 'web' ? 12 : 44,
+      paddingHorizontal: expanded ? 10 : 8,
       paddingBottom: 12,
+      zIndex: 30,
     },
-    sidebarCompact: {
-      width: '100%',
-      borderRightWidth: 0,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
-      paddingTop: Platform.OS === 'web' ? 10 : 36,
-      maxHeight: 96,
+    sidebarOverlay: {
+      position: 'absolute',
+      left: 0,
+      top: 0,
+      bottom: 0,
+      height: '100%',
+      shadowColor: '#000',
+      shadowOpacity: 0.25,
+      shadowRadius: 12,
+      elevation: 8,
     },
     brandRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      marginBottom: 6,
-      paddingHorizontal: 4,
+      gap: 6,
+      marginBottom: 8,
+      minHeight: 36,
     },
     brandLogo: { width: 28, height: 28, borderRadius: 6 },
     brand: {
       color: colors.accent,
-      fontSize: 18,
+      fontSize: 17,
       fontWeight: '800',
       letterSpacing: -0.3,
       flex: 1,
+      minWidth: 0,
     },
+    collapseBtn: {
+      marginLeft: 'auto',
+      width: 32,
+      height: 32,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bgCard,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    navScroll: { flex: 1 },
+    navScrollInner: { gap: 2, paddingVertical: 6 },
     navItem: {
       borderRadius: 8,
-      paddingVertical: 8,
+      paddingVertical: 9,
       paddingHorizontal: 10,
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
     },
+    navItemIcon: { justifyContent: 'center', paddingHorizontal: 0 },
     navItemOn: { backgroundColor: colors.accentDim },
-    navText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
+    navText: { color: colors.textMuted, fontWeight: '600', fontSize: 13, flex: 1 },
     navTextOn: { color: colors.text, fontWeight: '800' },
     logout: {
-      paddingVertical: 8,
+      paddingVertical: 9,
       paddingHorizontal: 10,
       flexDirection: 'row',
       alignItems: 'center',
@@ -306,7 +365,7 @@ function makeStyles(colors: ThemeColors) {
     logoutText: { color: colors.danger, fontWeight: '700', fontSize: 13 },
     content: { flex: 1, minWidth: 0 },
     contentHeader: {
-      paddingHorizontal: 14,
+      paddingHorizontal: isPhone ? 12 : 16,
       paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
@@ -314,7 +373,7 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      gap: 12,
+      gap: 8,
       zIndex: 10,
     },
     titleRow: {
@@ -326,7 +385,7 @@ function makeStyles(colors: ThemeColors) {
     },
     contentTitle: {
       color: colors.text,
-      fontSize: 18,
+      fontSize: isPhone ? 16 : 18,
       fontWeight: '800',
       letterSpacing: -0.2,
       flexShrink: 1,
@@ -335,7 +394,8 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      maxWidth: 240,
+      maxWidth: isPhone ? 72 : 240,
+      flexShrink: 0,
     },
     userName: {
       color: colors.text,
@@ -357,7 +417,7 @@ function makeStyles(colors: ThemeColors) {
     },
     avatarImg: { width: 34, height: 34 },
     avatarText: { color: colors.accent, fontWeight: '800', fontSize: 12 },
-    contentBody: { flex: 1 },
+    contentBody: { flex: 1, minWidth: 0 },
     menuBackdrop: {
       flex: 1,
       backgroundColor: colors.overlay,
@@ -367,7 +427,7 @@ function makeStyles(colors: ThemeColors) {
       paddingRight: 12,
     },
     menuCard: {
-      width: 220,
+      width: Math.min(220, width - 24),
       backgroundColor: colors.bgCard,
       borderRadius: 12,
       borderWidth: 1,

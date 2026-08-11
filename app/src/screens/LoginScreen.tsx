@@ -317,7 +317,7 @@ function makeStyles(colors: ThemeColors) {
       flexGrow: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      padding: 24,
+      padding: 16,
     },
     card: {
       width: '100%',
@@ -326,7 +326,7 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 16,
       borderWidth: 1,
       borderColor: colors.border,
-      padding: 24,
+      padding: 20,
       gap: 10,
     },
     brandBlock: { alignItems: 'center', marginBottom: 8, gap: 8 },

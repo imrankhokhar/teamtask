@@ -89,6 +89,9 @@ First open on free plan can take **30–60 seconds**.
 2. Login with your TeamTask account.
 3. Optional: browser menu → **Install TeamTask** / **Create shortcut**.
 
+### Android APK (wraps the website)
+Install `releases/TeamTask.apk` (built by `build-apk.cmd`). It opens **https://tt.exodevs.com** full-screen. Website deploys show up when you reopen the app.
+
 ### Mobile (install as an app — same URL as the website)
 1. Open **https://tt.exodevs.com** in Chrome (Android) or Safari (iPhone).
 2. Login with the same account.

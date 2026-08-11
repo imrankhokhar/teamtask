@@ -36,6 +36,12 @@ function main() {
     ].join('');
     html = html.replace('</head>', `${inject}</head>`);
   }
+  if (!html.includes('viewport-fit=cover')) {
+    html = html.replace(
+      'width=device-width, initial-scale=1, shrink-to-fit=no',
+      'width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover'
+    );
+  }
   if (!html.includes('rel="manifest"')) {
     const pwa = [
       '<link rel="manifest" href="/manifest.json" />',

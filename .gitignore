@@ -13,3 +13,14 @@ server/uploads/*
 .env
 .DS_Store
 releases/*.exe
+releases/*.apk
+.tools/
+android-wrapper/.gradle/
+android-wrapper/build/
+android-wrapper/app/build/
+android-wrapper/local.properties
+.tools/
+android-wrapper/.gradle/
+android-wrapper/build/
+android-wrapper/app/build/
+android-wrapper/local.properties

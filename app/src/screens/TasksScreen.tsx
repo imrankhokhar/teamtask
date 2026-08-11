@@ -177,6 +177,7 @@ function makeStyles(colors: ThemeColors) {
       borderColor: colors.border,
       width: spacing.cardWidth,
       maxWidth: '100%',
+      flexGrow: 1,
     },
     row: { flexDirection: 'row', justifyContent: 'space-between', gap: 8, alignItems: 'center' },
     cardTitle: { color: colors.text, fontSize: 15, fontWeight: '700', flex: 1 },

@@ -374,6 +374,7 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: 1,
       borderColor: colors.border,
       width: spacing.cardWidth,
+      flexGrow: 1,
       maxWidth: '100%',
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
