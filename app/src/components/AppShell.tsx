@@ -125,9 +125,16 @@ export default function AppShell({
   const isPhone = width < 768;
   const [expanded, setExpanded] = useState(true);
   const collapsed = !expanded;
+  const overlay = isPhone && expanded;
+  // Phone WebView/PWA often reports inset 0 while drawing under the status bar.
+  const minTop = isPhone ? 44 : 8;
+  const safeTop =
+    Platform.OS === 'web'
+      ? (`max(${Math.max(insets.top || 0, minTop)}px, env(safe-area-inset-top, 0px))` as any)
+      : Math.max(insets.top || 0, 12);
   const styles = useMemo(
-    () => makeStyles(colors, { isPhone, expanded, width, topInset: insets.top }),
-    [colors, isPhone, expanded, width, insets.top]
+    () => makeStyles(colors, { isPhone, expanded, width }),
+    [colors, isPhone, expanded, width]
   );
   const items = MENU.filter((m) => !m.perm || can(m.perm));
   const [menuOpen, setMenuOpen] = useState(false);
@@ -135,7 +142,6 @@ export default function AppShell({
   const logo = resolveUrl(settings?.logoUrl);
   const appName = settings?.appName || 'TeamTask';
   const tip = info || MODULE_INFO[active] || '';
-  const overlay = isPhone && expanded;
 
   function go(screen: string) {
     setMenuOpen(false);
@@ -144,7 +150,7 @@ export default function AppShell({
   }
 
   const sidebar = (
-    <View style={[styles.sidebar, overlay && styles.sidebarOverlay]}>
+    <View style={[styles.sidebar, overlay && styles.sidebarOverlay, { paddingTop: safeTop }]}>
       <View style={styles.brandRow}>
         {logo ? (
           <Image source={{ uri: logo }} style={styles.brandLogo} resizeMode="contain" />
@@ -207,7 +213,7 @@ export default function AppShell({
       ) : null}
       {sidebar}
       <View style={styles.content}>
-        <View style={styles.contentHeader}>
+        <View style={[styles.contentHeader, { paddingTop: safeTop }]}>
           <View style={styles.titleRow}>
             <Text style={styles.contentTitle} numberOfLines={1}>
               {title || active}
@@ -275,14 +281,13 @@ export default function AppShell({
 
 function makeStyles(
   colors: ThemeColors,
-  opts: { isPhone: boolean; expanded: boolean; width: number; topInset: number }
+  opts: { isPhone: boolean; expanded: boolean; width: number }
 ) {
-  const { isPhone, expanded, width, topInset } = opts;
+  const { isPhone, expanded, width } = opts;
   const openW = isPhone ? Math.min(240, Math.max(200, width * 0.78)) : 232;
   const railW = 56;
   const sidebarW = expanded ? openW : railW;
   const overlay = isPhone && expanded;
-  const safeTop = Math.max(topInset || 0, Platform.OS === 'web' ? 10 : 12);
 
   return StyleSheet.create({
     root: {
@@ -303,7 +308,6 @@ function makeStyles(
       backgroundColor: colors.bgElevated,
       borderRightWidth: 1,
       borderRightColor: colors.border,
-      paddingTop: safeTop,
       paddingHorizontal: expanded ? 10 : 6,
       paddingBottom: 12,
       zIndex: 30,
@@ -382,10 +386,9 @@ function makeStyles(
       gap: 10,
     },
     logoutText: { color: colors.danger, fontWeight: '700', fontSize: 13 },
-    content: { flex: 1, minWidth: 0, overflow: 'hidden' },
+    content: { flex: 1, minWidth: 0, overflow: 'hidden', flexDirection: 'column' },
     contentHeader: {
       paddingHorizontal: isPhone ? 10 : 16,
-      paddingTop: overlay ? safeTop : 10,
       paddingBottom: 10,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
@@ -395,6 +398,8 @@ function makeStyles(
       justifyContent: 'space-between',
       gap: 8,
       zIndex: 10,
+      flexShrink: 0,
+      ...(Platform.OS === 'web' ? { position: 'sticky' as any, top: 0 } : {}),
     },
     titleRow: {
       flexDirection: 'row',
@@ -443,7 +448,7 @@ function makeStyles(
       backgroundColor: colors.overlay,
       justifyContent: 'flex-start',
       alignItems: 'flex-end',
-      paddingTop: Platform.OS === 'web' ? 56 : 72,
+      paddingTop: 72,
       paddingRight: 12,
     },
     menuCard: {

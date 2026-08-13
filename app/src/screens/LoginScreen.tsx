@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useAuth } from '../auth';
 import { api, ApiError, getApiBaseUrlSyncFallback, refreshApiUrl } from '../api';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ThemeColors, spacing } from '../theme';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
@@ -35,7 +36,12 @@ function resolveUrl(path?: string | null) {
 export default function LoginScreen({ navigation }: any) {
   const { login, register } = useAuth();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const safeTop =
+    Platform.OS === 'web'
+      ? (`max(${Math.max(insets.top || 0, 44)}px, env(safe-area-inset-top, 0px))` as any)
+      : Math.max(insets.top || 0, 16);
 
   const [mode, setMode] = useState<Mode>('login');
   const [name, setName] = useState('');
@@ -186,7 +192,7 @@ export default function LoginScreen({ navigation }: any) {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView
-        contentContainerStyle={styles.inner}
+        contentContainerStyle={[styles.inner, { paddingTop: safeTop }]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.card}>

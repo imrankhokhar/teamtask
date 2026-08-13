@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Platform,
   ActivityIndicator,
 } from 'react-native';
 import { api, TASK_STATUSES, statusLabel, ApiError } from '../api';
 import { useTheme, ThemeColors, spacing } from '../theme';
+import AppShell from '../components/AppShell';
 import FormField from '../components/FormField';
 import LoadingView from '../components/LoadingView';
 import ReminderPickerModal from '../components/ReminderPickerModal';
@@ -65,6 +65,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
   const [teamIds, setTeamIds] = useState<string[]>([]);
   const [checklistText, setChecklistText] = useState('');
   const [checklist, setChecklist] = useState<string[]>([]);
+  const [existingChecklist, setExistingChecklist] = useState<any[]>([]);
   const [remindersLocal, setRemindersLocal] = useState<string[]>(['']);
   const [pickerIndex, setPickerIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -88,6 +89,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
           setStatus(task.status || 'pending');
           setAssigneeIds((task.assignees || []).map((a: any) => a.id));
           setTeamIds((task.teams || []).map((tm: any) => tm.id));
+          setExistingChecklist(task.checklist || []);
           const fromList = (task.reminders || [])
             .map((r: any) => formatReminderLocal(r.at))
             .filter(Boolean);
@@ -170,11 +172,34 @@ export default function CreateTaskScreen({ navigation, route }: any) {
     }
   }
 
+  async function addChecklistItem() {
+    const text = checklistText.trim();
+    if (!text) return;
+    if (editing && taskId) {
+      try {
+        const data = await api.addChecklist(taskId, text);
+        if (data?.item) setExistingChecklist((list) => [...list, data.item]);
+        else setExistingChecklist((list) => [...list, { id: `tmp-${Date.now()}`, text, isChecked: false }]);
+        setChecklistText('');
+      } catch (e: any) {
+        showMsg(e.message || 'Failed to add checklist item', true);
+      }
+      return;
+    }
+    setChecklist((c) => [...c, text]);
+    setChecklistText('');
+  }
+
   if (loading) {
-    return <LoadingView label="Loading…" fullScreen />;
+    return (
+      <AppShell navigation={navigation} active="Tasks" title={editing ? 'Edit task' : 'Create task'}>
+        <LoadingView label="Loading…" />
+      </AppShell>
+    );
   }
 
   return (
+    <AppShell navigation={navigation} active="Tasks" title={editing ? 'Edit task' : 'Create task'}>
     <ScrollView
       style={styles.root}
       contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
@@ -190,8 +215,6 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         <Ionicons name="arrow-back" size={18} color={colors.info} />
         <Text style={styles.back}>Back to tasks</Text>
       </TouchableOpacity>
-
-      <Text style={styles.h1}>{editing ? 'Edit task' : 'Create task'}</Text>
 
       {!!msg && (
         <Text style={[styles.banner, msgError ? styles.bannerErr : styles.bannerOk]}>{msg}</Text>
@@ -264,35 +287,39 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         ))}
       </View>
 
-      {!editing && (
-        <>
-          <Text style={styles.label}>Checklist</Text>
-          <View style={styles.row}>
-            <TextInput
-              style={[styles.input, { flex: 1 }]}
-              value={checklistText}
-              onChangeText={setChecklistText}
-              placeholder="Add checklist point"
-              placeholderTextColor={colors.textMuted}
-            />
-            <TouchableOpacity
-              style={styles.addBtn}
-              onPress={() => {
-                if (!checklistText.trim()) return;
-                setChecklist((c) => [...c, checklistText.trim()]);
-                setChecklistText('');
-              }}
-            >
-              <Text style={styles.addBtnText}>Add</Text>
-            </TouchableOpacity>
-          </View>
-          {checklist.map((c, i) => (
+      <Text style={styles.label}>Checklist</Text>
+      {editing
+        ? existingChecklist.map((item) => (
+            <View key={item.id} style={styles.checkItem}>
+              <View style={[styles.box, item.isChecked && styles.boxOn]}>
+                {item.isChecked ? <Text style={styles.tick}>✓</Text> : null}
+              </View>
+              <Text style={[styles.checkItemText, item.isChecked && styles.checkDone]}>
+                {item.text}
+              </Text>
+              <Text style={styles.checkState}>{item.isChecked ? 'Marked' : 'Unmarked'}</Text>
+            </View>
+          ))
+        : checklist.map((c, i) => (
             <Text key={i} style={styles.checkLine}>
               • {c}
             </Text>
           ))}
-        </>
-      )}
+      {editing && existingChecklist.length === 0 ? (
+        <Text style={styles.hint}>No checklist items yet.</Text>
+      ) : null}
+      <View style={styles.row}>
+        <TextInput
+          style={[styles.input, { flex: 1 }]}
+          value={checklistText}
+          onChangeText={setChecklistText}
+          placeholder="Add checklist point"
+          placeholderTextColor={colors.textMuted}
+        />
+        <TouchableOpacity style={styles.addBtn} onPress={addChecklistItem}>
+          <Text style={styles.addBtnText}>Add</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.label}>Reminders (local time on this device)</Text>
       {remindersLocal.map((value, index) => (
@@ -349,6 +376,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
         }}
       />
     </ScrollView>
+    </AppShell>
   );
 }
 
@@ -360,10 +388,8 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      marginTop: Platform.OS === 'web' ? 12 : 48,
       marginBottom: 4,
     },
-    h1: { color: colors.text, fontSize: 22, fontWeight: '800', marginBottom: 10 },
     banner: {
       borderRadius: 10,
       padding: 10,
@@ -429,6 +455,32 @@ function makeStyles(colors: ThemeColors) {
     },
     addBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
     checkLine: { color: colors.text, marginTop: 4, fontSize: 13 },
+    checkItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      backgroundColor: colors.bgCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: spacing.cardRadius,
+    },
+    checkItemText: { color: colors.text, fontSize: 14, fontWeight: '600', flex: 1, minWidth: 0 },
+    checkDone: { textDecorationLine: 'line-through', color: colors.textMuted },
+    checkState: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+    box: {
+      width: 20,
+      height: 20,
+      borderRadius: 5,
+      borderWidth: 2,
+      borderColor: colors.accent,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    boxOn: { backgroundColor: colors.accent },
+    tick: { color: colors.onAccent, fontWeight: '900', fontSize: 11, lineHeight: 12 },
     hint: { color: colors.textMuted, fontSize: 11, marginTop: 6, lineHeight: 16 },
     save: {
       marginTop: 18,

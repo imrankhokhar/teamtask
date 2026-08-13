@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api, TASK_STATUSES, statusLabel } from '../api';
 import { useTheme, ThemeColors, statusColors, spacing } from '../theme';
 import { useAuth } from '../auth';
+import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
 import ReminderPickerModal from '../components/ReminderPickerModal';
@@ -184,11 +185,15 @@ export default function TaskDetailScreen({ route, navigation }: any) {
   }
 
   if (!task) {
-    return <LoadingView label="Loading…" fullScreen />;
+    return (
+      <AppShell navigation={navigation} active="Tasks" title="Tasks">
+        <LoadingView label="Loading…" />
+      </AppShell>
+    );
   }
 
   return (
-    <>
+    <AppShell navigation={navigation} active="Tasks" title="Tasks">
       <ScrollView
         style={styles.root}
         contentContainerStyle={{ padding: 16, paddingBottom: 48 }}
@@ -356,7 +361,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
         }}
       />
       {dialog}
-    </>
+    </AppShell>
   );
 }
 
@@ -368,7 +373,6 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      marginTop: 48,
       marginBottom: 8,
     },
     titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

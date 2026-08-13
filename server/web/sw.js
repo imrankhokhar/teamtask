@@ -1,4 +1,4 @@
-/* build 1786444595923 */
+/* build 1786603716609 */
 /* TeamTask PWA — never cache HTML/SW so deploys show without a server purge. */
 const CACHE = 'teamtask-pwa-v2';
 

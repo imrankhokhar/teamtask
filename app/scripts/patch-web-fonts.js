@@ -42,18 +42,28 @@ function main() {
       'width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover'
     );
   }
-  if (!html.includes('overflow-x:hidden')) {
+  const layoutCss =
+    '<style id="tt-layout">html,body,#root{height:100%;max-width:100%;overflow:hidden;box-sizing:border-box}#root{display:flex;flex:1}</style>';
+  if (html.includes('id="tt-layout"')) {
+    html = html.replace(/<style id="tt-layout">[\s\S]*?<\/style>/, layoutCss);
+  } else if (html.includes('overflow-x:hidden')) {
     html = html.replace(
-      '</head>',
-      '<style>html,body,#root{max-width:100%;overflow-x:hidden;box-sizing:border-box}</style></head>'
+      /<style>html,body,#root\{max-width:100%;overflow-x:hidden;box-sizing:border-box\}<\/style>/,
+      layoutCss
     );
+  } else {
+    html = html.replace('</head>', `${layoutCss}</head>`);
   }
+  html = html.replace(
+    'apple-mobile-web-app-status-bar-style" content="black-translucent"',
+    'apple-mobile-web-app-status-bar-style" content="black"'
+  );
   if (!html.includes('rel="manifest"')) {
     const pwa = [
       '<link rel="manifest" href="/manifest.json" />',
       '<meta name="mobile-web-app-capable" content="yes" />',
       '<meta name="apple-mobile-web-app-capable" content="yes" />',
-      '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
+      '<meta name="apple-mobile-web-app-status-bar-style" content="black" />',
       '<meta name="apple-mobile-web-app-title" content="TeamTask" />',
       '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
     ].join('');
