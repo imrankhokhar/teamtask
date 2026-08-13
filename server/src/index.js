@@ -273,12 +273,17 @@ function enrichTask(db, task) {
 }
 
 function userCanAccessTask(userId, taskId) {
-  return getTaskRecipientIds(taskId).includes(userId);
+  const db = readDb();
+  const user = db.users.find((u) => u.id === userId);
+  if (user && isAdminUser(db, user)) return true;
+  return getTaskRecipientIds(taskId, db).includes(userId);
 }
 
 function getVisibleTasksForUser(db, userId) {
+  const user = db.users.find((u) => u.id === userId);
+  const seeAll = user && isAdminUser(db, user);
   return db.tasks
-    .filter((t) => getTaskRecipientIds(t.id).includes(userId))
+    .filter((t) => seeAll || getTaskRecipientIds(t.id, db).includes(userId))
     .map((t) => enrichTask(db, t))
     .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 }
@@ -879,6 +884,8 @@ app.patch('/api/teams/:id', authRequired, requirePerm('teams.edit'), async (req,
 
     if (Array.isArray(memberIds) || (members && members.length)) {
       const ids = new Set(Array.isArray(memberIds) ? memberIds : db.teamMembers.filter((m) => m.teamId === teamId).map((m) => m.userId));
+      if (team.createdBy) ids.add(team.createdBy);
+      ids.add(req.user.id);
       (members || []).forEach((m) => {
         const user = ensureUserFromMember(db, m, req.user.id);
         if (user) {
@@ -947,7 +954,7 @@ app.get('/api/tasks', authRequired, requirePerm('tasks.view'), (req, res) => {
 });
 
 app.get('/api/tasks/:id', authRequired, requirePerm('tasks.view'), (req, res) => {
-  if (!userCanAccessTask(req.user.id, req.params.id) && req.user.role !== 'admin') {
+  if (!userCanAccessTask(req.user.id, req.params.id)) {
     return res.status(403).json({ error: 'Not assigned to this task' });
   }
   const db = readDb();
@@ -1055,7 +1062,7 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
 
 app.patch('/api/tasks/:id', authRequired, requirePerm('tasks.edit'), async (req, res) => {
   const taskId = req.params.id;
-  if (!userCanAccessTask(req.user.id, taskId) && req.user.role !== 'admin') {
+  if (!userCanAccessTask(req.user.id, taskId)) {
     return res.status(403).json({ error: 'Not assigned to this task' });
   }
 
@@ -1366,7 +1373,7 @@ app.post('/api/checklist/:id/replies', authRequired, async (req, res) => {
 });
 
 // ---------- Notifications ----------
-app.get('/api/notifications', authRequired, requirePerm('notifications.view'), (req, res) => {
+app.get('/api/notifications', authRequired, (req, res) => {
   const db = readDb();
   const items = db.notifications
     .filter((n) => n.userId === req.user.id)

@@ -1,5 +1,6 @@
 const { readDb, updateDb } = require('./db');
 const { v4: uuid } = require('uuid');
+const { isAdminUser } = require('./permissions');
 const {
   resolveTemplateKey,
   buildEmailFromTemplate,
@@ -17,25 +18,53 @@ function registerSocket(userId, ws) {
   });
 }
 
-function getTaskRecipientIds(taskId) {
-  const db = readDb();
-  const task = db.tasks.find((t) => t.id === taskId);
+function asUserId(value) {
+  if (!value) return null;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') return value.userId || value.id || null;
+  return null;
+}
+
+/** Reporter + individual assignees + every member of assigned teams. Any role, including Admin. */
+function getTaskRecipientIds(taskId, db) {
+  db = db || readDb();
+  const task = (db.tasks || []).find((t) => t.id === taskId);
   if (!task) return [];
 
   const ids = new Set();
-  ids.add(task.reporterId);
+  const add = (value) => {
+    const id = asUserId(value);
+    if (id) ids.add(id);
+  };
 
-  db.taskAssignees
+  add(task.reporterId);
+  add(task.createdBy);
+
+  for (const a of db.taskAssignees || []) {
+    if (a.taskId === taskId) add(a.userId || a);
+  }
+
+  const teamIds = (db.taskTeamAssignees || [])
     .filter((a) => a.taskId === taskId)
-    .forEach((a) => ids.add(a.userId));
+    .map((a) => a.teamId)
+    .filter(Boolean);
 
-  const teamIds = db.taskTeamAssignees
-    .filter((a) => a.taskId === taskId)
-    .map((a) => a.teamId);
+  for (const team of db.teams || []) {
+    if (!teamIds.includes(team.id)) continue;
+    add(team.createdBy);
+    add(team.leadId);
+  }
 
-  db.teamMembers
-    .filter((m) => teamIds.includes(m.teamId))
-    .forEach((m) => ids.add(m.userId));
+  for (const m of db.teamMembers || []) {
+    if (teamIds.includes(m.teamId)) add(m.userId || m);
+  }
+
+  // Team-assigned tasks: every admin is in the loop (they manage the team even if not listed as a member).
+  if (teamIds.length) {
+    for (const u of db.users || []) {
+      if (isAdminUser(db, u)) add(u.id);
+    }
+  }
 
   return [...ids];
 }
@@ -81,9 +110,8 @@ function pushRealtime(userId, payload) {
  * opts.templateKey / opts.emailVars control SMTP email content from Settings → Templates.
  */
 async function notifyTaskUsers(taskId, { type, title, body, excludeUserId, actorUserId, emailVars = {}, templateKey }) {
-  const recipientIds = getTaskRecipientIds(taskId).filter(
-    (id) => id !== excludeUserId
-  );
+  // Keep assigned admins; only skip the person who just acted.
+  const recipientIds = getTaskRecipientIds(taskId).filter((id) => id && id !== excludeUserId);
   if (!recipientIds.length) return [];
 
   const db = readDb();
