@@ -1890,6 +1890,11 @@ wss.on('connection', (ws, req) => {
     const payload = jwt.verify(token, JWT_SECRET);
     registerSocket(payload.id, ws);
     ws.send(JSON.stringify({ type: 'connected', userId: payload.id }));
+    const ping = setInterval(() => {
+      if (ws.readyState === 1) ws.ping();
+      else clearInterval(ping);
+    }, 25000);
+    ws.on('close', () => clearInterval(ping));
   } catch {
     ws.close();
   }

@@ -27,6 +27,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import FuelCalScreen from './src/screens/FuelCalScreen';
 import { refreshApiUrl } from './src/api';
 import LoadingView from './src/components/LoadingView';
+import NotifyToasts from './src/components/NotifyToasts';
 
 const Stack = createNativeStackNavigator();
 
@@ -106,6 +107,7 @@ function ThemedApp() {
   return (
     <NavigationContainer theme={navTheme}>
       <RootNav />
+      <NotifyToasts />
     </NavigationContainer>
   );
 }

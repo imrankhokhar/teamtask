@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDateTime } from '../format';
+import { onAppNotify } from '../notifyBus';
 
 export default function NotificationsScreen({ navigation }: any) {
   const { colors } = useTheme();
@@ -41,6 +42,15 @@ export default function NotificationsScreen({ navigation }: any) {
       load();
     }, [load])
   );
+
+  useEffect(() => {
+    return onAppNotify((n) => {
+      setItems((list) => {
+        if (!n?.id || list.some((x) => x.id === n.id)) return list;
+        return [n, ...list];
+      });
+    });
+  }, []);
 
   async function markAll() {
     await api.readAllNotifications();
@@ -72,7 +82,7 @@ export default function NotificationsScreen({ navigation }: any) {
             ListEmptyComponent={<Text style={styles.empty}>No notifications yet</Text>}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={[styles.card, !item.isRead && styles.unread]}
+                style={[styles.card, !item.read && !item.isRead && styles.unread]}
                 onPress={() => {
                   if (item.taskId) navigation.navigate('TaskDetail', { id: item.taskId });
                 }}
