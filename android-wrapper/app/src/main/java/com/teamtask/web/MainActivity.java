@@ -2,19 +2,17 @@ package com.teamtask.web;
 
 import android.annotation.SuppressLint;
 import android.Manifest;
-import android.app.Notification;
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.ValueCallback;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -26,23 +24,30 @@ import android.widget.TextView;
 import android.app.Activity;
 
 public class MainActivity extends Activity {
-    public static final String SITE = "https://tt.exodevs.com/";
-    private static final String CHANNEL_ID = "teamtask";
+    public static final String SITE = NotifyHelper.SITE;
     private static final int REQ_NOTIFY = 1001;
     private WebView webView;
     private ProgressBar progress;
     private TextView errorView;
     private boolean lastLoadFailed;
-    private int notifyId = 1;
     private boolean askedNotify;
+    private final Handler poll = new Handler(Looper.getMainLooper());
+    private final Runnable pollRun = new Runnable() {
+        @Override
+        public void run() {
+            new Thread(() -> NotifyHelper.pullAndPost(getApplicationContext()), "teamtask-poll").start();
+            poll.postDelayed(this, 12_000);
+        }
+    };
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        ensureNotifyChannel();
+        NotifyHelper.ensureChannel(this);
         askNotifyPermission();
+        NotifyHelper.schedule(this);
 
         webView = findViewById(R.id.webview);
         progress = findViewById(R.id.progress);
@@ -92,6 +97,20 @@ public class MainActivity extends Activity {
             }
 
             @Override
+            public void onPageFinished(WebView view, String url) {
+                view.evaluateJavascript(
+                    "(function(){try{return localStorage.getItem('teamtask_token')||'';}catch(e){return '';}})()",
+                    (ValueCallback<String>) value -> {
+                        if (value == null || "null".equals(value) || "\"\"".equals(value)) return;
+                        String tok = value.replace("\"", "").trim();
+                        if (!tok.isEmpty() && !"undefined".equals(tok)) {
+                            NotifyHelper.saveToken(MainActivity.this, tok);
+                        }
+                    }
+                );
+            }
+
+            @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
                 if (request.isForMainFrame()) {
                     lastLoadFailed = true;
@@ -109,7 +128,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        ensureNotifyChannel();
+        NotifyHelper.ensureChannel(this);
+        poll.removeCallbacks(pollRun);
+        poll.post(pollRun);
+    }
+
+    @Override
+    protected void onPause() {
+        poll.removeCallbacks(pollRun);
+        NotifyHelper.schedule(this);
+        super.onPause();
     }
 
     private void askNotifyPermission() {
@@ -122,49 +150,20 @@ public class MainActivity extends Activity {
         requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
     }
 
-    private void ensureNotifyChannel() {
-        if (Build.VERSION.SDK_INT < 26) return;
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm == null) return;
-        NotificationChannel ch = new NotificationChannel(
-            CHANNEL_ID,
-            "TeamTask alerts",
-            NotificationManager.IMPORTANCE_HIGH
-        );
-        ch.setDescription("Task comments, checklist, and reminders");
-        ch.enableVibration(true);
-        ch.setShowBadge(true);
-        ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
-        nm.createNotificationChannel(ch);
-    }
-
-    void showLocalNotification(String title, String body) {
-        ensureNotifyChannel();
-        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (nm == null) return;
-        Intent open = new Intent(this, MainActivity.class);
-        open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
-        PendingIntent pi = PendingIntent.getActivity(this, 0, open, flags);
-        Notification.Builder b = Build.VERSION.SDK_INT >= 26
-            ? new Notification.Builder(this, CHANNEL_ID)
-            : new Notification.Builder(this);
-        b.setContentTitle(title == null || title.isEmpty() ? "TeamTask" : title)
-            .setContentText(body == null ? "" : body)
-            .setSmallIcon(android.R.drawable.stat_notify_more)
-            .setAutoCancel(true)
-            .setContentIntent(pi);
-        if (Build.VERSION.SDK_INT < 26) {
-            b.setPriority(Notification.PRIORITY_HIGH);
-        }
-        nm.notify(notifyId++, b.build());
-    }
-
     public class NotifyBridge {
         @JavascriptInterface
+        public void setAuthToken(String token) {
+            NotifyHelper.saveToken(getApplicationContext(), token);
+        }
+
+        @JavascriptInterface
         public void notify(String title, String body) {
-            runOnUiThread(() -> showLocalNotification(title, body));
+            NotifyHelper.post(getApplicationContext(), "", title, body);
+        }
+
+        @JavascriptInterface
+        public void push(String id, String title, String body) {
+            NotifyHelper.post(getApplicationContext(), id, title, body);
         }
     }
 

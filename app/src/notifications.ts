@@ -63,15 +63,42 @@ function askWebPermission() {
   }
 }
 
-function showWebBanner(n: { title: string; body: string; taskId?: string }) {
+function nativeBridge() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+  return (window as any).TeamTaskNative || null;
+}
+
+function pushTokenToNative(token: string | null) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-  const native = (window as any).TeamTaskNative;
-  if (native && typeof native.notify === 'function') {
+  try {
+    if (token) window.localStorage.setItem('teamtask_token', token);
+    else window.localStorage.removeItem('teamtask_token');
+  } catch {
+    // ignore
+  }
+  const native = nativeBridge();
+  if (native && typeof native.setAuthToken === 'function') {
     try {
-      native.notify(String(n.title || ''), String(n.body || ''));
+      native.setAuthToken(token || '');
     } catch {
-      // fall through to browser notification
+      // ignore
     }
+  }
+}
+
+function showWebBanner(n: { id?: string; title: string; body: string; taskId?: string }) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const native = nativeBridge();
+  const title = String(n.title || 'TeamTask');
+  const body = String(n.body || '');
+  try {
+    if (native && typeof native.push === 'function') {
+      native.push(String(n.id || ''), title, body);
+    } else if (native && typeof native.notify === 'function') {
+      native.notify(title, body);
+    }
+  } catch {
+    // fall through
   }
   const payload = {
     type: 'notify',
@@ -220,6 +247,7 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
 
     (async () => {
       if (!token) return;
+      pushTokenToNative(token);
       askWebPermission();
       try {
         const pushToken = await registerForPush();
