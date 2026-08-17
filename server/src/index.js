@@ -1165,16 +1165,18 @@ app.patch('/api/tasks/:id', authRequired, requirePerm('tasks.edit'), async (req,
       emailVars: { taskTitle: task.title },
     });
   }
-  if (reminderChanged && newReminderSummary) {
+  if (reminderChanged) {
     await notifyTaskUsers(taskId, {
       type: 'reminder_set',
       title: 'Reminders updated',
-      body: `Reminders for "${task.title}": ${newReminderSummary}`,
+      body: newReminderSummary
+        ? `${req.user.name} updated reminders for "${task.title}": ${newReminderSummary}`
+        : `${req.user.name} cleared reminders on "${task.title}"`,
       excludeUserId: req.user.id,
       actorUserId: req.user.id,
       emailVars: {
         taskTitle: task.title,
-        reminderAt: newReminderSummary,
+        reminderAt: newReminderSummary || 'cleared',
       },
     });
     const anyDue = (task.reminders || []).some(
@@ -1212,7 +1214,7 @@ app.delete('/api/tasks/:id', authRequired, requirePerm('tasks.delete'), (req, re
 });
 
 // ---------- Checklist ----------
-app.post('/api/tasks/:id/checklist', authRequired, (req, res) => {
+app.post('/api/tasks/:id/checklist', authRequired, async (req, res) => {
   const taskId = req.params.id;
   if (!userCanAccessTask(req.user.id, taskId)) {
     return res.status(403).json({ error: 'Not assigned to this task' });
@@ -1237,6 +1239,20 @@ app.post('/api/tasks/:id/checklist', authRequired, (req, res) => {
     const task = db.tasks.find((t) => t.id === taskId);
     if (task) task.updatedAt = new Date().toISOString();
   });
+
+  const task = readDb().tasks.find((t) => t.id === taskId);
+  await notifyTaskUsers(taskId, {
+    type: 'checklist_added',
+    title: 'Checklist item added',
+    body: `${req.user.name} added "${item.text}" on "${task?.title || 'task'}"`,
+    excludeUserId: req.user.id,
+    actorUserId: req.user.id,
+    emailVars: {
+      taskTitle: task?.title || '',
+      checklistItem: item.text,
+    },
+  });
+
   res.status(201).json({ item });
 });
 

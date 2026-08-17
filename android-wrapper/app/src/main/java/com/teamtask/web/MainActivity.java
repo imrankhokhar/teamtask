@@ -2,10 +2,16 @@ package com.teamtask.web;
 
 import android.annotation.SuppressLint;
 import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
@@ -20,16 +26,19 @@ import android.app.Activity;
 
 public class MainActivity extends Activity {
     public static final String SITE = "https://tt.exodevs.com/";
+    private static final String CHANNEL_ID = "teamtask";
     private WebView webView;
     private ProgressBar progress;
     private TextView errorView;
     private boolean lastLoadFailed;
+    private int notifyId = 1;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        ensureNotifyChannel();
         if (Build.VERSION.SDK_INT >= 33) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
         }
@@ -48,6 +57,8 @@ public class MainActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        webView.addJavascriptInterface(new NotifyBridge(), "TeamTaskNative");
 
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -92,6 +103,49 @@ public class MainActivity extends Activity {
 
         errorView.setOnClickListener(v -> webView.loadUrl(SITE));
         webView.loadUrl(SITE);
+    }
+
+    private void ensureNotifyChannel() {
+        if (Build.VERSION.SDK_INT < 26) return;
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        NotificationChannel ch = new NotificationChannel(
+            CHANNEL_ID,
+            "TeamTask",
+            NotificationManager.IMPORTANCE_HIGH
+        );
+        ch.setDescription("Task comments, checklist, and reminders");
+        ch.enableVibration(true);
+        nm.createNotificationChannel(ch);
+    }
+
+    void showLocalNotification(String title, String body) {
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        Intent open = new Intent(this, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent pi = PendingIntent.getActivity(this, 0, open, flags);
+        Notification.Builder b = Build.VERSION.SDK_INT >= 26
+            ? new Notification.Builder(this, CHANNEL_ID)
+            : new Notification.Builder(this);
+        b.setContentTitle(title == null || title.isEmpty() ? "TeamTask" : title)
+            .setContentText(body == null ? "" : body)
+            .setSmallIcon(android.R.drawable.stat_notify_more)
+            .setAutoCancel(true)
+            .setContentIntent(pi);
+        if (Build.VERSION.SDK_INT < 26) {
+            b.setPriority(Notification.PRIORITY_HIGH);
+        }
+        nm.notify(notifyId++, b.build());
+    }
+
+    public class NotifyBridge {
+        @JavascriptInterface
+        public void notify(String title, String body) {
+            runOnUiThread(() -> showLocalNotification(title, body));
+        }
     }
 
     @Override

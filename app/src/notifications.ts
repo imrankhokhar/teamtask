@@ -45,6 +45,7 @@ function toneForNotification(type: string, settings: AppSettings) {
     return settings.reminderToneUrl || settings.ringtoneUrl;
   }
   if (
+    type === 'checklist_added' ||
     type === 'checklist_checked' ||
     type === 'checklist_unchecked' ||
     type === 'checklist_reply' ||
@@ -64,6 +65,14 @@ function askWebPermission() {
 
 function showWebBanner(n: { title: string; body: string; taskId?: string }) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const native = (window as any).TeamTaskNative;
+  if (native && typeof native.notify === 'function') {
+    try {
+      native.notify(String(n.title || ''), String(n.body || ''));
+    } catch {
+      // fall through to browser notification
+    }
+  }
   const payload = {
     type: 'notify',
     title: n.title,
@@ -221,7 +230,7 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
       }
       await connectWs();
       await poll();
-      pollTimer = setInterval(poll, 15000);
+      pollTimer = setInterval(poll, 8000);
     })();
 
     const appSub = AppState.addEventListener('change', (state) => {

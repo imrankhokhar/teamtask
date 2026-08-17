@@ -63,6 +63,15 @@ const TEMPLATE_DEFS = [
       'Hi {{recipientName}},\n\n{{actorName}} ({{actorRole}}) changed the status of "{{taskTitle}}" to {{status}}.\n\n— TeamTask',
   },
   {
+    key: 'checklist_added',
+    label: 'Checklist item added',
+    description: 'When a new checklist item is added to a task',
+    category: 'checklist',
+    defaultSubject: '[TeamTask] Checklist item added: {{taskTitle}}',
+    defaultBody:
+      'Hi {{recipientName}},\n\n{{actorName}} added "{{checklistItem}}" on task "{{taskTitle}}".\n\n— TeamTask',
+  },
+  {
     key: 'checklist_checked',
     label: 'Checklist marked complete',
     description: 'When a checklist item is checked',
@@ -205,6 +214,7 @@ function resolveTemplateKey(type, actor) {
   const map = {
     task_assigned: 'task_assigned',
     status_changed: 'status_changed',
+    checklist_added: 'checklist_added',
     checklist_checked: 'checklist_checked',
     checklist_unchecked: 'checklist_unchecked',
     reminder_set: 'reminder_set',
