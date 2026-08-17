@@ -7,6 +7,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
@@ -27,11 +28,13 @@ import android.app.Activity;
 public class MainActivity extends Activity {
     public static final String SITE = "https://tt.exodevs.com/";
     private static final String CHANNEL_ID = "teamtask";
+    private static final int REQ_NOTIFY = 1001;
     private WebView webView;
     private ProgressBar progress;
     private TextView errorView;
     private boolean lastLoadFailed;
     private int notifyId = 1;
+    private boolean askedNotify;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -39,9 +42,7 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         ensureNotifyChannel();
-        if (Build.VERSION.SDK_INT >= 33) {
-            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 1);
-        }
+        askNotifyPermission();
 
         webView = findViewById(R.id.webview);
         progress = findViewById(R.id.progress);
@@ -105,21 +106,40 @@ public class MainActivity extends Activity {
         webView.loadUrl(SITE);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        ensureNotifyChannel();
+    }
+
+    private void askNotifyPermission() {
+        if (Build.VERSION.SDK_INT < 33) return;
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        if (askedNotify) return;
+        askedNotify = true;
+        requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+    }
+
     private void ensureNotifyChannel() {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
         NotificationChannel ch = new NotificationChannel(
             CHANNEL_ID,
-            "TeamTask",
+            "TeamTask alerts",
             NotificationManager.IMPORTANCE_HIGH
         );
         ch.setDescription("Task comments, checklist, and reminders");
         ch.enableVibration(true);
+        ch.setShowBadge(true);
+        ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
         nm.createNotificationChannel(ch);
     }
 
     void showLocalNotification(String title, String body) {
+        ensureNotifyChannel();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
         if (nm == null) return;
         Intent open = new Intent(this, MainActivity.class);
