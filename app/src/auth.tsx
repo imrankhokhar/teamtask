@@ -1,6 +1,30 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from './api';
+
+function syncNativeAuthToken(token: string | null) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  try {
+    if (token) {
+      window.localStorage.setItem('teamtask_token', token);
+      window.localStorage.setItem('token', token);
+    } else {
+      window.localStorage.removeItem('teamtask_token');
+      window.localStorage.removeItem('token');
+    }
+  } catch {
+    // ignore
+  }
+  const native = (window as any).TeamTaskNative;
+  if (native && typeof native.setAuthToken === 'function') {
+    try {
+      native.setAuthToken(token || '');
+    } catch {
+      // ignore
+    }
+  }
+}
 
 export type User = {
   id: string;
@@ -85,6 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         const t = await AsyncStorage.getItem('token');
         if (!t) return;
+        syncNativeAuthToken(t);
         setToken(t);
         const data = await api.me();
         setUser(applyUser(data.user));
@@ -117,6 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async login(email, password) {
         const data = await api.login({ email, password });
         await AsyncStorage.setItem('token', data.token);
+        syncNativeAuthToken(data.token);
         setToken(data.token);
         setUser(applyUser(data.user));
         const me = await api.me();
@@ -126,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       async register(name, email, password) {
         const data = await api.register({ name, email, password });
         await AsyncStorage.setItem('token', data.token);
+        syncNativeAuthToken(data.token);
         setToken(data.token);
         setUser(applyUser(data.user));
         const me = await api.me();
@@ -134,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
       async logout() {
         await AsyncStorage.removeItem('token');
+        syncNativeAuthToken(null);
         setToken(null);
         setUser(null);
       },

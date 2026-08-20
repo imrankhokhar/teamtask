@@ -110,8 +110,13 @@ function pushRealtime(userId, payload) {
  * opts.templateKey / opts.emailVars control SMTP email content from Settings → Templates.
  */
 async function notifyTaskUsers(taskId, { type, title, body, excludeUserId, actorUserId, emailVars = {}, templateKey }) {
-  // Keep assigned admins; only skip the person who just acted.
-  const recipientIds = getTaskRecipientIds(taskId).filter((id) => id && id !== excludeUserId);
+  // Skip the actor when others will still be notified. If they are the only
+  // recipient (solo task / self-test), keep them so shade + in-app still fire.
+  const allIds = getTaskRecipientIds(taskId).filter(Boolean);
+  let recipientIds = allIds.filter((id) => id !== excludeUserId);
+  if (!recipientIds.length && excludeUserId && allIds.includes(excludeUserId)) {
+    recipientIds = [excludeUserId];
+  }
   if (!recipientIds.length) return [];
 
   const db = readDb();

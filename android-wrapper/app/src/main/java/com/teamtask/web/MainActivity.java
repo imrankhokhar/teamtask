@@ -109,23 +109,11 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                // RN AsyncStorage on web + our teamtask_token key
-                view.evaluateJavascript(
-                    "(function(){try{"
-                        + "var t=localStorage.getItem('teamtask_token')"
-                        + "||localStorage.getItem('token')"
-                        + "||localStorage.getItem('@AsyncStorage:token')"
-                        + "||'';"
-                        + "return t||'';"
-                        + "}catch(e){return '';}})()",
-                    (ValueCallback<String>) value -> {
-                        if (value == null || "null".equals(value) || "\"\"".equals(value)) return;
-                        String tok = value.replace("\"", "").trim();
-                        if (!tok.isEmpty() && !"undefined".equals(tok)) {
-                            NotifyHelper.saveToken(MainActivity.this, tok);
-                        }
-                    }
-                );
+                syncTokenFromWeb(view);
+                // AsyncStorage may land after first paint — retry a few times
+                poll.postDelayed(() -> syncTokenFromWeb(webView), 1500);
+                poll.postDelayed(() -> syncTokenFromWeb(webView), 4000);
+                poll.postDelayed(() -> syncTokenFromWeb(webView), 8000);
             }
 
             @Override
@@ -164,6 +152,37 @@ public class MainActivity extends Activity {
             NotifyPollService.start(this);
         }
         super.onPause();
+    }
+
+    private void syncTokenFromWeb(WebView view) {
+        if (view == null) return;
+        view.evaluateJavascript(
+            "(function(){try{"
+                + "var t=localStorage.getItem('teamtask_token')"
+                + "||localStorage.getItem('token')"
+                + "||localStorage.getItem('@AsyncStorage:token');"
+                + "if(t)return t;"
+                + "for(var i=0;i<localStorage.length;i++){"
+                + "var k=localStorage.key(i);"
+                + "if(!k)continue;"
+                + "if(k==='token'||k.indexOf('token')>=0||k.indexOf('AsyncStorage')>=0){"
+                + "var v=localStorage.getItem(k);"
+                + "if(v&&v.length>20&&v.indexOf('eyJ')>=0)return v;"
+                + "}}"
+                + "return '';"
+                + "}catch(e){return '';}})()",
+            (ValueCallback<String>) value -> {
+                if (value == null || "null".equals(value) || "\"\"".equals(value)) return;
+                String tok = value;
+                if (tok.length() >= 2 && tok.charAt(0) == '"') {
+                    tok = tok.substring(1, tok.length() - 1);
+                }
+                tok = tok.replace("\\\"", "\"").replace("\\/", "/").trim();
+                if (!tok.isEmpty() && !"undefined".equals(tok)) {
+                    NotifyHelper.saveToken(MainActivity.this, tok);
+                }
+            }
+        );
     }
 
     private void askNotifyPermission() {

@@ -111,7 +111,7 @@ public class NotifyPollService extends Service {
             : new Notification.Builder(this);
         b.setContentTitle("TeamTask")
             .setContentText("Checking for task alerts…")
-            .setSmallIcon(R.drawable.ic_stat_notify)
+            .setSmallIcon(android.R.drawable.stat_notify_sync)
             .setContentIntent(pi)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
