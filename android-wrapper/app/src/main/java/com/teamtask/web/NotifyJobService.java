@@ -9,8 +9,9 @@ public class NotifyJobService extends JobService {
         new Thread(() -> {
             try {
                 NotifyHelper.pullAndPost(getApplicationContext());
+                NotifyPollService.start(getApplicationContext());
+                NotifyHelper.scheduleAlarm(getApplicationContext());
             } finally {
-                NotifyHelper.schedule(getApplicationContext());
                 jobFinished(params, false);
             }
         }, "teamtask-notify").start();

@@ -9,8 +9,12 @@ public class BootReceiver extends BroadcastReceiver {
     public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
         String a = intent.getAction();
-        if (Intent.ACTION_BOOT_COMPLETED.equals(a) || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)) {
+        if (Intent.ACTION_BOOT_COMPLETED.equals(a)
+            || Intent.ACTION_MY_PACKAGE_REPLACED.equals(a)
+            || Intent.ACTION_LOCKED_BOOT_COMPLETED.equals(a)) {
             NotifyHelper.schedule(context);
+            NotifyHelper.scheduleAlarm(context);
+            NotifyPollService.start(context);
         }
     }
 }

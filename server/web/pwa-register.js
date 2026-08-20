@@ -7,7 +7,7 @@
         return Promise.all(regs.map(function (r) { return r.update(); }));
       })
       .then(function () {
-        return navigator.serviceWorker.register('/sw.js?v=1786970091369', {
+        return navigator.serviceWorker.register('/sw.js?v=1787230428763', {
           scope: '/',
           updateViaCache: 'none',
         });

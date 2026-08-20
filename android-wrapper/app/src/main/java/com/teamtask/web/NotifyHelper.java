@@ -1,5 +1,6 @@
 package com.teamtask.web;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -11,6 +12,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.os.SystemClock;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -27,11 +29,14 @@ import java.util.Set;
 final class NotifyHelper {
     static final String SITE = "https://tt.exodevs.com/";
     static final String CHANNEL_ID = "teamtask";
+    static final String KEEP_ALIVE_CHANNEL = "teamtask_keepalive";
     private static final String PREFS = "teamtask";
     private static final String KEY_TOKEN = "token";
     private static final String KEY_SEEN = "seen";
     private static final String KEY_PRIMED = "primed";
     private static final int JOB_ID = 42;
+    private static final int ALARM_REQ = 77;
+    private static final long ALARM_MS = 60_000;
     private static int nextId = 1;
 
     private NotifyHelper() {}
@@ -42,7 +47,15 @@ final class NotifyHelper {
 
     static void saveToken(Context ctx, String token) {
         prefs(ctx).edit().putString(KEY_TOKEN, token == null ? "" : token).apply();
-        if (token != null && !token.isEmpty()) schedule(ctx);
+        if (token != null && !token.isEmpty()) {
+            ensureChannel(ctx);
+            ensureKeepAliveChannel(ctx);
+            schedule(ctx);
+            scheduleAlarm(ctx);
+            NotifyPollService.start(ctx);
+        } else {
+            NotifyPollService.stop(ctx);
+        }
     }
 
     static String token(Context ctx) {
@@ -63,6 +76,22 @@ final class NotifyHelper {
         ch.enableLights(true);
         ch.setShowBadge(true);
         ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+        nm.createNotificationChannel(ch);
+    }
+
+    static void ensureKeepAliveChannel(Context ctx) {
+        if (Build.VERSION.SDK_INT < 26) return;
+        NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        NotificationChannel ch = new NotificationChannel(
+            KEEP_ALIVE_CHANNEL,
+            "Background sync",
+            NotificationManager.IMPORTANCE_LOW
+        );
+        ch.setDescription("Keeps TeamTask able to deliver alerts when the app is closed");
+        ch.setShowBadge(false);
+        ch.enableVibration(false);
+        ch.setSound(null, null);
         nm.createNotificationChannel(ch);
     }
 
@@ -100,6 +129,9 @@ final class NotifyHelper {
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(pi)
             .setTicker(t);
+        if (Build.VERSION.SDK_INT >= 21) {
+            builder.setPriority(Notification.PRIORITY_HIGH);
+        }
         if (Build.VERSION.SDK_INT < 26) {
             builder.setPriority(Notification.PRIORITY_HIGH);
         }
@@ -111,13 +143,44 @@ final class NotifyHelper {
         JobScheduler js = (JobScheduler) ctx.getSystemService(Context.JOB_SCHEDULER_SERVICE);
         if (js == null) return;
         ComponentName name = new ComponentName(ctx, NotifyJobService.class);
-        JobInfo job = new JobInfo.Builder(JOB_ID, name)
+        JobInfo.Builder b = new JobInfo.Builder(JOB_ID, name)
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-            .setMinimumLatency(15_000)
-            .setOverrideDeadline(45_000)
-            .setPersisted(true)
-            .build();
-        js.schedule(job);
+            .setPersisted(true);
+        if (Build.VERSION.SDK_INT >= 24) {
+            b.setPeriodic(15 * 60_000L, 5 * 60_000L);
+        } else {
+            b.setPeriodic(15 * 60_000L);
+        }
+        try {
+            js.schedule(b.build());
+        } catch (Exception ignored) {
+            JobInfo once = new JobInfo.Builder(JOB_ID, name)
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                .setMinimumLatency(30_000)
+                .setOverrideDeadline(90_000)
+                .setPersisted(true)
+                .build();
+            js.schedule(once);
+        }
+    }
+
+    static void scheduleAlarm(Context ctx) {
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Intent i = new Intent(ctx, AlarmReceiver.class);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= 23) flags |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, ALARM_REQ, i, flags);
+        long when = SystemClock.elapsedRealtime() + ALARM_MS;
+        try {
+            if (Build.VERSION.SDK_INT >= 23) {
+                am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, when, pi);
+            } else {
+                am.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, when, pi);
+            }
+        } catch (Exception e) {
+            am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, when, pi);
+        }
     }
 
     static int pullAndPost(Context ctx) {
@@ -138,7 +201,9 @@ final class NotifyHelper {
             return 0;
         }
         int posted = 0;
-        for (JSONObject n : items) {
+        // Newest first from API — post oldest first so shade order feels natural
+        for (int i = items.size() - 1; i >= 0; i--) {
+            JSONObject n = items.get(i);
             String id = n.optString("id");
             if (id.isEmpty() || alreadySeen(ctx, id)) continue;
             post(ctx, id, n.optString("title"), n.optString("body"));

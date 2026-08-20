@@ -2,17 +2,21 @@ package com.teamtask.web;
 
 import android.annotation.SuppressLint;
 import android.Manifest;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
+import android.provider.Settings;
 import android.view.View;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
-import android.webkit.WebChromeClient;
 import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -31,6 +35,7 @@ public class MainActivity extends Activity {
     private TextView errorView;
     private boolean lastLoadFailed;
     private boolean askedNotify;
+    private boolean askedBattery;
     private final Handler poll = new Handler(Looper.getMainLooper());
     private final Runnable pollRun = new Runnable() {
         @Override
@@ -46,8 +51,14 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         NotifyHelper.ensureChannel(this);
+        NotifyHelper.ensureKeepAliveChannel(this);
         askNotifyPermission();
+        askIgnoreBattery();
         NotifyHelper.schedule(this);
+        NotifyHelper.scheduleAlarm(this);
+        if (!NotifyHelper.token(this).isEmpty()) {
+            NotifyPollService.start(this);
+        }
 
         webView = findViewById(R.id.webview);
         progress = findViewById(R.id.progress);
@@ -98,8 +109,15 @@ public class MainActivity extends Activity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
+                // RN AsyncStorage on web + our teamtask_token key
                 view.evaluateJavascript(
-                    "(function(){try{return localStorage.getItem('teamtask_token')||'';}catch(e){return '';}})()",
+                    "(function(){try{"
+                        + "var t=localStorage.getItem('teamtask_token')"
+                        + "||localStorage.getItem('token')"
+                        + "||localStorage.getItem('@AsyncStorage:token')"
+                        + "||'';"
+                        + "return t||'';"
+                        + "}catch(e){return '';}})()",
                     (ValueCallback<String>) value -> {
                         if (value == null || "null".equals(value) || "\"\"".equals(value)) return;
                         String tok = value.replace("\"", "").trim();
@@ -129,6 +147,10 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         NotifyHelper.ensureChannel(this);
+        NotifyHelper.scheduleAlarm(this);
+        if (!NotifyHelper.token(this).isEmpty()) {
+            NotifyPollService.start(this);
+        }
         poll.removeCallbacks(pollRun);
         poll.post(pollRun);
     }
@@ -137,6 +159,10 @@ public class MainActivity extends Activity {
     protected void onPause() {
         poll.removeCallbacks(pollRun);
         NotifyHelper.schedule(this);
+        NotifyHelper.scheduleAlarm(this);
+        if (!NotifyHelper.token(this).isEmpty()) {
+            NotifyPollService.start(this);
+        }
         super.onPause();
     }
 
@@ -148,6 +174,24 @@ public class MainActivity extends Activity {
         if (askedNotify) return;
         askedNotify = true;
         requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_NOTIFY);
+    }
+
+    private void askIgnoreBattery() {
+        if (askedBattery || Build.VERSION.SDK_INT < 23) return;
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        if (pm == null) return;
+        if (pm.isIgnoringBatteryOptimizations(getPackageName())) return;
+        askedBattery = true;
+        try {
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+            i.setData(Uri.parse("package:" + getPackageName()));
+            startActivity(i);
+        } catch (Exception ignored) {
+            try {
+                startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+            } catch (Exception ignored2) {
+            }
+        }
     }
 
     public class NotifyBridge {

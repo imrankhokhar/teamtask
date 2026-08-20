@@ -71,8 +71,13 @@ function nativeBridge() {
 function pushTokenToNative(token: string | null) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
   try {
-    if (token) window.localStorage.setItem('teamtask_token', token);
-    else window.localStorage.removeItem('teamtask_token');
+    if (token) {
+      window.localStorage.setItem('teamtask_token', token);
+      window.localStorage.setItem('token', token);
+    } else {
+      window.localStorage.removeItem('teamtask_token');
+      window.localStorage.removeItem('token');
+    }
   } catch {
     // ignore
   }
