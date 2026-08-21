@@ -7,10 +7,11 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
-import { useTheme, ThemeColors, spacing, listCardLayout } from '../theme';
+import { useTheme, ThemeColors, spacing, listCardLayoutFor } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -19,7 +20,8 @@ import { onAppNotify } from '../notifyBus';
 
 export default function NotificationsScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
   const [items, setItems] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -99,7 +101,7 @@ export default function NotificationsScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, width: number) {
   return StyleSheet.create({
     root: { flex: 1 },
     header: {
@@ -119,7 +121,7 @@ function makeStyles(colors: ThemeColors) {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.cardGap,
-      padding: 16,
+      padding: width < 700 ? 10 : 16,
       paddingBottom: 40,
       alignItems: 'flex-start',
     },
@@ -129,7 +131,7 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayout,
+      ...listCardLayoutFor(width),
     },
     unread: { borderColor: colors.accent },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },

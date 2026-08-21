@@ -7,11 +7,12 @@ import {
   TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors, spacing, listCardLayout } from '../theme';
+import { useTheme, ThemeColors, spacing, listCardLayoutFor } from '../theme';
 import AppShell from '../components/AppShell';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
@@ -22,7 +23,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 export default function UsersScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
   const { confirm, dialog } = useConfirm();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -294,7 +296,7 @@ export default function UsersScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, width: number) {
   return StyleSheet.create({
     root: { flex: 1 },
     toolbar: {
@@ -373,7 +375,7 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayout,
+      ...listCardLayoutFor(width),
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },

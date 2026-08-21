@@ -8,11 +8,12 @@ import {
   RefreshControl,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors, spacing, listCardLayout } from '../theme';
+import { useTheme, ThemeColors, spacing, listCardLayoutFor } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
@@ -73,7 +74,8 @@ function Field({
 export default function RolesScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
   const { confirm, dialog } = useConfirm();
   const [roles, setRoles] = useState<any[]>([]);
   const [modules, setModules] = useState<any[]>([]);
@@ -325,7 +327,7 @@ export default function RolesScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, width: number) {
   return StyleSheet.create({
     msg: {
       color: colors.accent,
@@ -409,7 +411,7 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayout,
+      ...listCardLayoutFor(width),
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },

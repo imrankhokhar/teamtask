@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../auth';
 import { useTheme, ThemeColors } from '../theme';
 import { getApiBaseUrlSyncFallback } from '../api';
+import { applyBrandingIcons } from '../brandingIcons';
 import InfoTip from './InfoTip';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -142,6 +143,10 @@ export default function AppShell({
   const logo = resolveUrl(settings?.logoUrl);
   const appName = settings?.appName || 'TeamTask';
   const tip = info || MODULE_INFO[active] || '';
+
+  useEffect(() => {
+    applyBrandingIcons(settings?.logoUrl);
+  }, [settings?.logoUrl]);
 
   function go(screen: string) {
     setMenuOpen(false);

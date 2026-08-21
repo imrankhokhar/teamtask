@@ -15,6 +15,7 @@ import { useAuth } from '../auth';
 import { api, ApiError, getApiBaseUrlSyncFallback, refreshApiUrl } from '../api';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ThemeColors, spacing } from '../theme';
+import { applyBrandingIcons } from '../brandingIcons';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
 
@@ -69,7 +70,10 @@ export default function LoginScreen({ navigation }: any) {
         const data = await api.branding();
         if (data.appName) setAppName(data.appName);
         if (data.tagline) setTagline(data.tagline);
-        if (data.logoUrl) setLogoUrl(resolveUrl(data.logoUrl));
+        if (data.logoUrl) {
+          setLogoUrl(resolveUrl(data.logoUrl));
+          applyBrandingIcons(data.logoUrl);
+        }
       } catch {
         // keep defaults when server unreachable
       }

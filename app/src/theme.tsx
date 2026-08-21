@@ -100,6 +100,30 @@ export const spacing = {
   labelFont: 12,
 };
 
+/** Phone: full-width stack. Wider screens: wrapping multi-column cards. */
+export function listCardLayoutFor(width: number) {
+  const phone = width < 700;
+  if (phone) {
+    return {
+      width: '100%' as const,
+      maxWidth: '100%' as const,
+      alignSelf: 'stretch' as const,
+      flexGrow: 0,
+      flexShrink: 0,
+      flexBasis: 'auto' as const,
+      minWidth: 0,
+    };
+  }
+  return {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 280,
+    maxWidth: 400,
+    minWidth: 0,
+  };
+}
+
+/** @deprecated Prefer listCardLayoutFor(width) */
 export const listCardLayout = {
   flexGrow: 1,
   flexShrink: 1,

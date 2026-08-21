@@ -9,11 +9,12 @@ import {
   Alert,
   RefreshControl,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors, spacing, listCardLayout } from '../theme';
+import { useTheme, ThemeColors, spacing, listCardLayoutFor } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
@@ -22,7 +23,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 export default function TeamsScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
   const { confirm, dialog } = useConfirm();
   const [teams, setTeams] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -283,7 +285,7 @@ export default function TeamsScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, width: number) {
   return StyleSheet.create({
     root: { flex: 1 },
     toolbar: {
@@ -374,7 +376,7 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayout,
+      ...listCardLayoutFor(width),
     },
     cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
     metaLabel: {

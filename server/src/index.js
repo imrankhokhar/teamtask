@@ -1509,6 +1509,37 @@ app.post(
       }
       db.settings.logoUrl = url;
     });
+
+    // Also refresh web/PWA home-screen icons from the uploaded logo (best-effort).
+    try {
+      const src = req.file.path;
+      const targets = [];
+      if (webRoot) {
+        targets.push(
+          path.join(webRoot, 'pwa-192.png'),
+          path.join(webRoot, 'pwa-512.png'),
+          path.join(webRoot, 'apple-touch-icon.png')
+        );
+      }
+      const publicDir = path.join(__dirname, '..', 'public');
+      if (fs.existsSync(publicDir)) {
+        targets.push(
+          path.join(publicDir, 'pwa-192.png'),
+          path.join(publicDir, 'pwa-512.png'),
+          path.join(publicDir, 'apple-touch-icon.png')
+        );
+      }
+      for (const dest of targets) {
+        try {
+          fs.copyFileSync(src, dest);
+        } catch {
+          // ignore per-file failures
+        }
+      }
+    } catch (err) {
+      console.warn('PWA icon sync skipped:', err.message);
+    }
+
     res.json({ settings: normalizeSettings(readDb().settings), logoUrl: url });
   }
 );

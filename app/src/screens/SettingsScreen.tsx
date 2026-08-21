@@ -16,6 +16,7 @@ import { api, ApiError, getApiBaseUrlSyncFallback } from '../api';
 import { useTheme, ThemeColors, ThemeMode, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import FormField from '../components/FormField';
+import { applyBrandingIcons } from '../brandingIcons';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -186,8 +187,9 @@ export default function SettingsScreen({ navigation }: any) {
       const data = await api.uploadLogo(fileUri, fileName, mimeType, fileObj);
       setLogoPath(data.logoUrl || data.settings?.logoUrl);
       setSettings({ ...settings, ...data.settings });
+      applyBrandingIcons(data.logoUrl || data.settings?.logoUrl);
       setBrandErr(false);
-      setBrandMsg('Logo updated');
+      setBrandMsg('Logo updated for login, sidebar, and web/PWA icons');
       await refreshMe();
     } catch (e: any) {
       setBrandErr(true);
@@ -234,8 +236,9 @@ export default function SettingsScreen({ navigation }: any) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>App branding</Text>
             <Text style={styles.sectionHint}>
-              Logo and name appear on the login screen and in the sidebar. Use a square PNG or JPG —
-              recommended 512×512 px (min 192×192), max 4 MB.
+              Logo and name appear on login and in the sidebar. Use a square PNG/JPG — recommended
+              512×512 px (min 192×192), max 4 MB. The phone home-screen icon is part of the installed
+              APK and cannot change from Settings; upload updates in-app branding and web/PWA icons.
             </Text>
 
             <View style={styles.logoRow}>

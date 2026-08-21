@@ -7,10 +7,11 @@ import {
   StyleSheet,
   RefreshControl,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, statusLabel } from '../api';
-import { useTheme, ThemeColors, statusColors, spacing, listCardLayout } from '../theme';
+import { useTheme, ThemeColors, statusColors, spacing, listCardLayoutFor } from '../theme';
 import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
@@ -20,7 +21,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 export default function TasksScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { width } = useWindowDimensions();
+  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
   const { confirm, dialog } = useConfirm();
   const [tasks, setTasks] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -160,14 +162,14 @@ export default function TasksScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ThemeColors, width: number) {
   return StyleSheet.create({
     root: { flex: 1, backgroundColor: colors.bg },
     grid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
       gap: spacing.cardGap,
-      padding: 12,
+      padding: width < 700 ? 10 : 12,
       paddingBottom: 100,
       alignItems: 'flex-start',
       width: '100%',
@@ -178,7 +180,7 @@ function makeStyles(colors: ThemeColors) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayout,
+      ...listCardLayoutFor(width),
     },
     row: {
       flexDirection: 'row',

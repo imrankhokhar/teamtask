@@ -26,6 +26,8 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.graphics.Color;
 
 public class MainActivity extends Activity {
     public static final String SITE = NotifyHelper.SITE;
@@ -254,6 +256,37 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setAuthToken(String token) {
             NotifyHelper.saveToken(getApplicationContext(), token);
+        }
+
+        @JavascriptInterface
+        public void setAppLogo(String url) {
+            if (url == null || url.isEmpty()) return;
+            new Thread(() -> {
+                try {
+                    java.net.URL u = new java.net.URL(url);
+                    java.net.HttpURLConnection c = (java.net.HttpURLConnection) u.openConnection();
+                    c.setConnectTimeout(12000);
+                    c.setReadTimeout(12000);
+                    Bitmap bmp = android.graphics.BitmapFactory.decodeStream(c.getInputStream());
+                    c.disconnect();
+                    if (bmp == null) return;
+                    final Bitmap icon = Bitmap.createScaledBitmap(bmp, 192, 192, true);
+                    if (bmp != icon) bmp.recycle();
+                    runOnUiThread(() -> {
+                        try {
+                            if (Build.VERSION.SDK_INT >= 21) {
+                                setTaskDescription(new ActivityManager.TaskDescription(
+                                    "TeamTask",
+                                    icon,
+                                    Color.parseColor("#0F1C17")
+                                ));
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    });
+                } catch (Exception ignored) {
+                }
+            }, "teamtask-logo").start();
         }
 
         @JavascriptInterface
