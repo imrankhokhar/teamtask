@@ -22,7 +22,7 @@ import { formatReminderLabel } from '../format';
 
 export default function TaskDetailScreen({ route, navigation }: any) {
   const { id } = route.params;
-  const { user, can } = useAuth();
+  const { user, can, isAdmin } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { confirm, dialog } = useConfirm();
@@ -140,6 +140,21 @@ export default function TaskDetailScreen({ route, navigation }: any) {
     try {
       await api.addChecklist(id, newCheck.trim());
       setNewCheck('');
+      await load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  }
+
+  async function deleteChecklistItem(item: any) {
+    const ok = await confirm({
+      title: 'Delete checklist item',
+      message: `Delete "${item.text}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await api.deleteChecklistItem(item.id);
       await load();
     } catch (e: any) {
       Alert.alert('Error', e.message);
@@ -322,6 +337,15 @@ export default function TaskDetailScreen({ route, navigation }: any) {
                   <Text style={styles.miniBtnText}>Unmark + reason</Text>
                 </TouchableOpacity>
               )}
+              {isAdmin ? (
+                <TouchableOpacity
+                  style={[styles.miniBtn, styles.dangerBtn]}
+                  onPress={() => deleteChecklistItem(item)}
+                >
+                  <Ionicons name="trash-outline" size={14} color={colors.accent} />
+                  <Text style={styles.miniBtnText}>Delete</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         ))}

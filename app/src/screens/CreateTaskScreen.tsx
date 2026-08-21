@@ -10,10 +10,12 @@ import {
 } from 'react-native';
 import { api, TASK_STATUSES, statusLabel, ApiError } from '../api';
 import { useTheme, ThemeColors, spacing } from '../theme';
+import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
 import FormField from '../components/FormField';
 import LoadingView from '../components/LoadingView';
 import ReminderPickerModal from '../components/ReminderPickerModal';
+import { useConfirm } from '../components/ConfirmModal';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatReminderLabel } from '../format';
 
@@ -52,6 +54,8 @@ function formatReminderLocal(iso: string | null | undefined): string {
 
 export default function CreateTaskScreen({ navigation, route }: any) {
   const { colors } = useTheme();
+  const { isAdmin } = useAuth();
+  const { confirm, dialog } = useConfirm();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const taskId: string | undefined = route?.params?.taskId;
   const editing = Boolean(taskId);
@@ -190,6 +194,21 @@ export default function CreateTaskScreen({ navigation, route }: any) {
     setChecklistText('');
   }
 
+  async function deleteExistingChecklistItem(item: any) {
+    const ok = await confirm({
+      title: 'Delete checklist item',
+      message: `Delete "${item.text}"? This cannot be undone.`,
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await api.deleteChecklistItem(item.id);
+      setExistingChecklist((list) => list.filter((c) => c.id !== item.id));
+    } catch (e: any) {
+      showMsg(e.message || 'Failed to delete checklist item', true);
+    }
+  }
+
   if (loading) {
     return (
       <AppShell navigation={navigation} active="Tasks" title={editing ? 'Edit task' : 'Create task'}>
@@ -298,12 +317,28 @@ export default function CreateTaskScreen({ navigation, route }: any) {
                 {item.text}
               </Text>
               <Text style={styles.checkState}>{item.isChecked ? 'Marked' : 'Unmarked'}</Text>
+              {isAdmin ? (
+                <TouchableOpacity
+                  onPress={() => deleteExistingChecklistItem(item)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Delete checklist item"
+                >
+                  <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                </TouchableOpacity>
+              ) : null}
             </View>
           ))
         : checklist.map((c, i) => (
-            <Text key={i} style={styles.checkLine}>
-              • {c}
-            </Text>
+            <View key={i} style={styles.checkLineRow}>
+              <Text style={styles.checkLine}>• {c}</Text>
+              <TouchableOpacity
+                onPress={() => setChecklist((list) => list.filter((_, idx) => idx !== i))}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Remove checklist item"
+              >
+                <Ionicons name="close-outline" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           ))}
       {editing && existingChecklist.length === 0 ? (
         <Text style={styles.hint}>No checklist items yet.</Text>
@@ -375,6 +410,7 @@ export default function CreateTaskScreen({ navigation, route }: any) {
           setRemindersLocal((list) => list.map((v, i) => (i === pickerIndex ? local : v)));
         }}
       />
+      {dialog}
     </ScrollView>
     </AppShell>
   );
@@ -454,7 +490,14 @@ function makeStyles(colors: ThemeColors) {
       gap: 4,
     },
     addBtnText: { color: colors.accent, fontWeight: '700', fontSize: spacing.btnFont },
-    checkLine: { color: colors.text, marginTop: 4, fontSize: 13 },
+    checkLineRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+      marginTop: 4,
+    },
+    checkLine: { color: colors.text, fontSize: 13, flex: 1 },
     checkItem: {
       flexDirection: 'row',
       alignItems: 'center',

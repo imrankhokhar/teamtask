@@ -1256,6 +1256,22 @@ app.post('/api/tasks/:id/checklist', authRequired, async (req, res) => {
   res.status(201).json({ item });
 });
 
+app.delete('/api/checklist/:id', authRequired, adminRequired, (req, res) => {
+  const itemId = req.params.id;
+  const db0 = readDb();
+  const item0 = db0.checklistItems.find((c) => c.id === itemId);
+  if (!item0) return res.status(404).json({ error: 'Checklist item not found' });
+
+  updateDb((db) => {
+    db.checklistItems = db.checklistItems.filter((c) => c.id !== itemId);
+    db.checklistReplies = db.checklistReplies.filter((r) => r.checklistItemId !== itemId);
+    const task = db.tasks.find((t) => t.id === item0.taskId);
+    if (task) task.updatedAt = new Date().toISOString();
+  });
+
+  res.json({ ok: true });
+});
+
 app.patch('/api/checklist/:id/check', authRequired, async (req, res) => {
   const itemId = req.params.id;
   const db0 = readDb();
