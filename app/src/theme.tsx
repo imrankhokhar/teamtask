@@ -107,13 +107,17 @@ export const SIDEBAR_RAIL = 56;
 /**
  * List grids: phones = single full-width column (no row-wrap — that breaks
  * height/overflow in Android WebView). Wider screens = wrapping cards.
+ * Pass measured contentWidth (from AppShell) when available for accurate fit.
  */
-export function listLayoutFor(width: number) {
-  const phone = width < PHONE_MAX;
+export function listLayoutFor(windowWidth: number, contentWidth = 0) {
+  const phone = windowWidth < PHONE_MAX;
   const pad = phone ? 10 : 12;
   const gap = spacing.cardGap;
-  // Content column sits next to the 56px icon rail on phones
-  const cardWidth = Math.max(200, width - SIDEBAR_RAIL - pad * 2);
+  const column =
+    contentWidth > 40
+      ? contentWidth
+      : Math.max(200, windowWidth - (phone ? SIDEBAR_RAIL : 0));
+  const cardWidth = Math.max(160, column - pad * 2);
 
   return {
     phone,
@@ -148,14 +152,14 @@ export function listLayoutFor(width: number) {
     card: phone
       ? ({
           width: cardWidth,
-          maxWidth: cardWidth,
-          alignSelf: 'center',
+          maxWidth: '100%' as const,
+          alignSelf: 'stretch' as const,
           flexGrow: 0,
           flexShrink: 0,
-          flexBasis: 'auto',
+          flexBasis: 'auto' as const,
           minWidth: 0,
           minHeight: 0,
-          overflow: 'hidden',
+          overflow: 'hidden' as const,
         } as const)
       : ({
           flexGrow: 1,
@@ -164,7 +168,7 @@ export function listLayoutFor(width: number) {
           maxWidth: 400,
           minWidth: 0,
           minHeight: 0,
-          overflow: 'hidden',
+          overflow: 'hidden' as const,
         } as const),
   };
 }

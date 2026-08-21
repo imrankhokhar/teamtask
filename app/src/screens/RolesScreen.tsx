@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../auth';
 import { useTheme, ThemeColors, spacing, listLayoutFor } from '../theme';
+import { useContentWidth } from '../contentWidth';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
@@ -75,7 +76,8 @@ export default function RolesScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const layout = useMemo(() => listLayoutFor(width), [width]);
+  const contentWidth = useContentWidth();
+  const layout = useMemo(() => listLayoutFor(width, contentWidth), [width, contentWidth]);
   const styles = useMemo(() => makeStyles(colors, layout), [colors, layout]);
   const { confirm, dialog } = useConfirm();
   const [roles, setRoles] = useState<any[]>([]);

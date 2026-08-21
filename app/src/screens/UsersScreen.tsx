@@ -13,6 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
 import { useTheme, ThemeColors, spacing, listLayoutFor } from '../theme';
+import { useContentWidth } from '../contentWidth';
 import AppShell from '../components/AppShell';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
@@ -24,7 +25,8 @@ export default function UsersScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const layout = useMemo(() => listLayoutFor(width), [width]);
+  const contentWidth = useContentWidth();
+  const layout = useMemo(() => listLayoutFor(width, contentWidth), [width, contentWidth]);
   const styles = useMemo(() => makeStyles(colors, layout), [colors, layout]);
   const { confirm, dialog } = useConfirm();
   const [users, setUsers] = useState<any[]>([]);

@@ -12,6 +12,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useTheme, ThemeColors, spacing, listLayoutFor } from '../theme';
+import { useContentWidth } from '../contentWidth';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -21,7 +22,8 @@ import { onAppNotify } from '../notifyBus';
 export default function NotificationsScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const layout = useMemo(() => listLayoutFor(width), [width]);
+  const contentWidth = useContentWidth();
+  const layout = useMemo(() => listLayoutFor(width, contentWidth), [width, contentWidth]);
   const styles = useMemo(() => makeStyles(colors, layout), [colors, layout]);
   const [items, setItems] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);

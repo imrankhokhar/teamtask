@@ -302,10 +302,23 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
+        // SPA: WebView history is usually empty — ask React Navigation first.
+        webView.evaluateJavascript(
+            "(function(){try{"
+                + "if(window.TeamTaskNav&&window.TeamTaskNav.canGoBack&&window.TeamTaskNav.canGoBack()){"
+                + "window.TeamTaskNav.goBack();return '1';}"
+                + "return '0';"
+                + "}catch(e){return '0';}})()",
+            value -> {
+                boolean handled = value != null && value.contains("1");
+                if (handled) return;
+                if (webView.canGoBack()) {
+                    webView.goBack();
+                } else {
+                    // Stay in app (background) instead of finishing on root screen
+                    moveTaskToBack(true);
+                }
+            }
+        );
     }
 }

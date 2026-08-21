@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { NavigationContainer, DarkTheme, DefaultTheme } from '@react-navigation/native';
+import { ActivityIndicator, Platform, View } from 'react-native';
+import {
+  NavigationContainer,
+  DarkTheme,
+  DefaultTheme,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
@@ -30,6 +35,23 @@ import LoadingView from './src/components/LoadingView';
 import NotifyToasts from './src/components/NotifyToasts';
 
 const Stack = createNativeStackNavigator();
+export const navigationRef = createNavigationContainerRef();
+
+function installAndroidBackBridge() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  (window as any).TeamTaskNav = {
+    canGoBack() {
+      return navigationRef.isReady() && navigationRef.canGoBack();
+    },
+    goBack() {
+      if (navigationRef.isReady() && navigationRef.canGoBack()) {
+        navigationRef.goBack();
+        return true;
+      }
+      return false;
+    },
+  };
+}
 
 function RootNav() {
   const { user, loading } = useAuth();
@@ -105,7 +127,7 @@ function ThemedApp() {
   }
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={installAndroidBackBridge}>
       <RootNav />
       <NotifyToasts />
     </NavigationContainer>

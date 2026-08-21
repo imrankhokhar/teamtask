@@ -17,6 +17,7 @@ import { useAuth } from '../auth';
 import { useTheme, ThemeColors } from '../theme';
 import { getApiBaseUrlSyncFallback } from '../api';
 import { applyBrandingIcons } from '../brandingIcons';
+import { ContentWidthContext } from '../contentWidth';
 import InfoTip from './InfoTip';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -124,7 +125,9 @@ export default function AppShell({
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const isPhone = width < 768;
-  const [expanded, setExpanded] = useState(true);
+  // Phones stay icon-rail only unless the user expands. Defaulting to true
+  // re-opened the overlay every time a screen (e.g. TaskDetail) remounted.
+  const [expanded, setExpanded] = useState(() => width >= 768);
   const collapsed = !expanded;
   const overlay = isPhone && expanded;
   // Phone WebView/PWA often reports inset 0 while drawing under the status bar.
@@ -139,6 +142,7 @@ export default function AppShell({
   );
   const items = MENU.filter((m) => !m.perm || can(m.perm));
   const [menuOpen, setMenuOpen] = useState(false);
+  const [contentWidth, setContentWidth] = useState(0);
   const photo = resolveUrl(user?.avatarUrl);
   const logo = resolveUrl(settings?.logoUrl);
   const appName = settings?.appName || 'TeamTask';
@@ -147,6 +151,11 @@ export default function AppShell({
   useEffect(() => {
     applyBrandingIcons(settings?.logoUrl);
   }, [settings?.logoUrl]);
+
+  useEffect(() => {
+    // Crossing the phone/desktop breakpoint resets to the sensible default.
+    setExpanded(!isPhone);
+  }, [isPhone]);
 
   function go(screen: string) {
     setMenuOpen(false);
@@ -246,7 +255,17 @@ export default function AppShell({
           </TouchableOpacity>
         </View>
 
-        <View style={styles.contentBody}>{children}</View>
+        <View
+          style={styles.contentBody}
+          onLayout={(e) => {
+            const w = Math.round(e.nativeEvent.layout.width);
+            if (w > 0 && w !== contentWidth) setContentWidth(w);
+          }}
+        >
+          <ContentWidthContext.Provider value={contentWidth}>
+            {children}
+          </ContentWidthContext.Provider>
+        </View>
       </View>
 
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
