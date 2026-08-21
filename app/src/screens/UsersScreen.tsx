@@ -266,7 +266,7 @@ export default function UsersScreen({ navigation }: any) {
             ListEmptyComponent={<Text style={styles.empty}>No users yet.</Text>}
             renderItem={({ item }) => (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>
+                <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
                   {item.firstName || item.name} {item.lastName || ''}
                 </Text>
                 <Text style={styles.meta} numberOfLines={1}>

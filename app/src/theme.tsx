@@ -105,9 +105,8 @@ export const PHONE_MAX = 700;
 export const SIDEBAR_RAIL = 56;
 
 /**
- * List grids: phones = single full-width column (no row-wrap — that breaks
- * height/overflow in Android WebView). Wider screens = wrapping cards.
- * Pass measured contentWidth (from AppShell) when available for accurate fit.
+ * Equal-width cards from measured content area (not content text).
+ * Phones: 1 column. Wider: 2–3 columns of identical fixed width.
  */
 export function listLayoutFor(windowWidth: number, contentWidth = 0) {
   const phone = windowWidth < PHONE_MAX;
@@ -117,59 +116,39 @@ export function listLayoutFor(windowWidth: number, contentWidth = 0) {
     contentWidth > 40
       ? contentWidth
       : Math.max(200, windowWidth - (phone ? SIDEBAR_RAIL : 0));
-  const cardWidth = Math.max(160, column - pad * 2);
+  const inner = Math.max(160, column - pad * 2);
+  const cols = phone ? 1 : inner >= 960 ? 3 : inner >= 560 ? 2 : 1;
+  const cardWidth = Math.floor((inner - gap * (cols - 1)) / cols);
 
   return {
     phone,
     pad,
     gap,
+    cols,
     cardWidth,
-    grid: phone
-      ? ({
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          alignItems: 'stretch',
-          alignContent: 'flex-start',
-          paddingHorizontal: pad,
-          paddingTop: pad,
-          paddingBottom: 100,
-          gap,
-          width: '100%',
-          maxWidth: '100%',
-        } as const)
-      : ({
-          flexDirection: 'row',
-          flexWrap: 'wrap',
-          alignItems: 'flex-start',
-          alignContent: 'flex-start',
-          paddingHorizontal: pad,
-          paddingTop: pad,
-          paddingBottom: 40,
-          gap,
-          width: '100%',
-          maxWidth: '100%',
-        } as const),
-    card: phone
-      ? ({
-          width: cardWidth,
-          maxWidth: '100%' as const,
-          alignSelf: 'stretch' as const,
-          flexGrow: 0,
-          flexShrink: 0,
-          flexBasis: 'auto' as const,
-          minWidth: 0,
-          minHeight: 0,
-          overflow: 'hidden' as const,
-        } as const)
-      : ({
-          flexGrow: 1,
-          flexShrink: 1,
-          flexBasis: 280,
-          maxWidth: 400,
-          minWidth: 0,
-          minHeight: 0,
-          overflow: 'hidden' as const,
-        } as const),
+    grid: {
+      flexDirection: cols === 1 ? ('column' as const) : ('row' as const),
+      flexWrap: cols === 1 ? ('nowrap' as const) : ('wrap' as const),
+      alignItems: cols === 1 ? ('stretch' as const) : ('flex-start' as const),
+      alignContent: 'flex-start' as const,
+      paddingHorizontal: pad,
+      paddingTop: pad,
+      paddingBottom: phone ? 100 : 40,
+      gap,
+      width: '100%' as const,
+      maxWidth: '100%' as const,
+    },
+    card: {
+      width: cardWidth,
+      maxWidth: cardWidth,
+      minWidth: cardWidth,
+      alignSelf: cols === 1 ? ('stretch' as const) : ('flex-start' as const),
+      flexGrow: 0,
+      flexShrink: 0,
+      flexBasis: cardWidth,
+      minHeight: 0,
+      overflow: 'hidden' as const,
+    },
   };
 }
 

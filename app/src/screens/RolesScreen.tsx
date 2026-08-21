@@ -16,6 +16,7 @@ import { useAuth } from '../auth';
 import { useTheme, ThemeColors, spacing, listLayoutFor } from '../theme';
 import { useContentWidth } from '../contentWidth';
 import AppShell from '../components/AppShell';
+import CardDescription from '../components/CardDescription';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -297,11 +298,11 @@ export default function RolesScreen({ navigation }: any) {
           <View style={styles.cardGrid}>
             {roles.map((item) => (
               <View key={item.id} style={styles.card}>
-                <Text style={styles.cardTitle}>
+                <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
                   {item.name}
                   {item.isSystem ? ' (system)' : ''}
                 </Text>
-                <Text style={styles.meta}>{item.description || '—'}</Text>
+                <CardDescription text={item.description || '—'} colors={colors} previewWords={20} />
                 <Text style={styles.meta}>{(item.permissions || []).length} permissions</Text>
                 <View style={styles.actions}>
                   {can('roles.edit') ? (

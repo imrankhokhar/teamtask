@@ -14,6 +14,7 @@ import { api } from '../api';
 import { useTheme, ThemeColors, spacing, listLayoutFor } from '../theme';
 import { useContentWidth } from '../contentWidth';
 import AppShell from '../components/AppShell';
+import CardDescription from '../components/CardDescription';
 import LoadingView from '../components/LoadingView';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { formatDateTime } from '../format';
@@ -93,8 +94,10 @@ export default function NotificationsScreen({ navigation }: any) {
                   if (item.taskId) navigation.navigate('TaskDetail', { id: item.taskId });
                 }}
               >
-                <Text style={styles.cardTitle}>{item.title || item.type}</Text>
-                <Text style={styles.meta}>{item.body || item.message}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
+                  {item.title || item.type}
+                </Text>
+                <CardDescription text={item.body || item.message} colors={colors} />
                 <Text style={styles.time}>{formatDateTime(item.createdAt)}</Text>
               </TouchableOpacity>
             )}

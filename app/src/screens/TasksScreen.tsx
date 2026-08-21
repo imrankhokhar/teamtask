@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Alert,
   useWindowDimensions,
+  Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, statusLabel } from '../api';
@@ -15,6 +16,7 @@ import { useTheme, ThemeColors, statusColors, spacing, listLayoutFor } from '../
 import { useAuth } from '../auth';
 import { useContentWidth } from '../contentWidth';
 import AppShell from '../components/AppShell';
+import CardDescription from '../components/CardDescription';
 import LoadingView from '../components/LoadingView';
 import { useConfirm } from '../components/ConfirmModal';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -73,9 +75,10 @@ export default function TasksScreen({ navigation }: any) {
               <TouchableOpacity
                 style={styles.card}
                 onPress={() => navigation.navigate('TaskDetail', { id: item.id })}
+                activeOpacity={0.85}
               >
                 <View style={styles.row}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>
+                  <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
                     {item.title}
                   </Text>
                   <View
@@ -85,17 +88,15 @@ export default function TasksScreen({ navigation }: any) {
                     ]}
                   >
                     <Text style={styles.badgeText} numberOfLines={1}>
-                    {statusLabel(item.status)}
-                  </Text>
+                      {statusLabel(item.status)}
+                    </Text>
                   </View>
                 </View>
-                <Text style={styles.meta} numberOfLines={2}>
-                  {item.description || 'No description'}
-                </Text>
-                <Text style={styles.meta}>
+                <CardDescription text={item.description} colors={colors} />
+                <Text style={styles.meta} numberOfLines={1}>
                   {(item.checklist || []).filter((c: any) => c.isChecked).length}/
-                  {(item.checklist || []).length} checklist · {(item.assignees || []).length} people ·{' '}
-                  {(item.teams || []).length} teams
+                  {(item.checklist || []).length} checklist · {(item.assignees || []).length}{' '}
+                  people · {(item.teams || []).length} teams
                 </Text>
                 {(can('tasks.edit') || can('tasks.delete')) && (
                   <View style={styles.actions}>
@@ -195,12 +196,19 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
       fontWeight: '700',
       flex: 1,
       minWidth: 0,
+      ...(Platform.OS === 'web'
+        ? ({
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          } as any)
+        : null),
     },
     badge: {
       borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      flexShrink: 1,
+      flexShrink: 0,
       maxWidth: '42%',
     },
     badgeText: {
@@ -211,10 +219,11 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
     },
     meta: {
       color: colors.textMuted,
-      marginTop: 4,
+      marginTop: 6,
       fontSize: 12,
       width: '100%',
       flexShrink: 1,
+      minWidth: 0,
     },
     empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40, width: '100%' },
     fabRow: {

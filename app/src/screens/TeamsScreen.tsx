@@ -246,7 +246,9 @@ export default function TeamsScreen({ navigation }: any) {
             }
             renderItem={({ item }) => (
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>{item.name}</Text>
+                <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
+                  {item.name}
+                </Text>
                 <Text style={styles.metaLabel}>Members</Text>
                 {(item.members || []).length === 0 ? (
                   <Text style={styles.meta}>—</Text>
