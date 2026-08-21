@@ -30,12 +30,14 @@ import android.app.Activity;
 public class MainActivity extends Activity {
     public static final String SITE = NotifyHelper.SITE;
     private static final int REQ_NOTIFY = 1001;
+    private static final int REQ_FILE = 1002;
     private WebView webView;
     private ProgressBar progress;
     private TextView errorView;
     private boolean lastLoadFailed;
     private boolean askedNotify;
     private boolean askedBattery;
+    private ValueCallback<Uri[]> filePathCallback;
     private final Handler poll = new Handler(Looper.getMainLooper());
     private final Runnable pollRun = new Runnable() {
         @Override
@@ -87,6 +89,25 @@ public class MainActivity extends Activity {
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 request.grant(request.getResources());
+            }
+
+            @Override
+            public boolean onShowFileChooser(
+                WebView view,
+                ValueCallback<Uri[]> callback,
+                FileChooserParams params
+            ) {
+                if (filePathCallback != null) {
+                    filePathCallback.onReceiveValue(null);
+                }
+                filePathCallback = callback;
+                try {
+                    startActivityForResult(params.createIntent(), REQ_FILE);
+                } catch (Exception e) {
+                    filePathCallback = null;
+                    return false;
+                }
+                return true;
             }
         });
 
@@ -152,6 +173,22 @@ public class MainActivity extends Activity {
             NotifyPollService.start(this);
         }
         super.onPause();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQ_FILE) {
+            Uri[] results = null;
+            if (resultCode == RESULT_OK) {
+                results = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            }
+            if (filePathCallback != null) {
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     private void syncTokenFromWeb(WebView view) {

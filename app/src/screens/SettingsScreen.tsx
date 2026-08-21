@@ -130,20 +130,60 @@ export default function SettingsScreen({ navigation }: any) {
 
   async function pickLogo() {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'image/*',
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled || !result.assets?.length) return;
-      const file = result.assets[0];
-      setLogoBusy(true);
       setBrandMsg('');
-      const data = await api.uploadLogo(
-        file.uri,
-        file.name || 'logo.png',
-        file.mimeType,
-        Platform.OS === 'web' ? (file as any).file : undefined
-      );
+      let fileUri = '';
+      let fileName = 'logo.png';
+      let mimeType = 'image/png';
+      let fileObj: File | Blob | undefined;
+
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        const picked = await new Promise<{
+          file: File;
+          uri: string;
+        } | null>((resolve) => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/png,image/jpeg,image/webp,image/gif,.png,.jpg,.jpeg,.webp,.gif';
+          input.style.display = 'none';
+          let settled = false;
+          const finish = (value: { file: File; uri: string } | null) => {
+            if (settled) return;
+            settled = true;
+            input.remove();
+            resolve(value);
+          };
+          input.onchange = () => {
+            const f = input.files?.[0];
+            if (!f) {
+              finish(null);
+              return;
+            }
+            finish({ file: f, uri: URL.createObjectURL(f) });
+          };
+          input.addEventListener('cancel', () => finish(null));
+          document.body.appendChild(input);
+          input.click();
+        });
+        if (!picked) return;
+        fileObj = picked.file;
+        fileUri = picked.uri;
+        fileName = picked.file.name || 'logo.png';
+        mimeType = picked.file.type || 'image/png';
+      } else {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: 'image/*',
+          copyToCacheDirectory: true,
+        });
+        if (result.canceled || !result.assets?.length) return;
+        const file = result.assets[0];
+        fileUri = file.uri;
+        fileName = file.name || 'logo.png';
+        mimeType = file.mimeType || 'image/png';
+        fileObj = (file as any).file;
+      }
+
+      setLogoBusy(true);
+      const data = await api.uploadLogo(fileUri, fileName, mimeType, fileObj);
       setLogoPath(data.logoUrl || data.settings?.logoUrl);
       setSettings({ ...settings, ...data.settings });
       setBrandErr(false);
@@ -194,7 +234,8 @@ export default function SettingsScreen({ navigation }: any) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>App branding</Text>
             <Text style={styles.sectionHint}>
-              Logo and name appear on the login screen and in the sidebar.
+              Logo and name appear on the login screen and in the sidebar. Use a square PNG or JPG —
+              recommended 512×512 px (min 192×192), max 4 MB.
             </Text>
 
             <View style={styles.logoRow}>
@@ -205,16 +246,19 @@ export default function SettingsScreen({ navigation }: any) {
                   <Ionicons name="image-outline" size={28} color={colors.textMuted} />
                 )}
               </View>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={pickLogo} disabled={logoBusy}>
-                {logoBusy ? (
-                  <ActivityIndicator color={colors.accent} />
-                ) : (
-                  <View style={styles.btnInner}>
-                    <Ionicons name="cloud-upload-outline" size={16} color={colors.accent} />
-                    <Text style={styles.secondaryBtnText}>Upload logo</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              <View style={{ flex: 1, gap: 6 }}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={pickLogo} disabled={logoBusy}>
+                  {logoBusy ? (
+                    <ActivityIndicator color={colors.accent} />
+                  ) : (
+                    <View style={styles.btnInner}>
+                      <Ionicons name="cloud-upload-outline" size={16} color={colors.accent} />
+                      <Text style={styles.secondaryBtnText}>Upload logo</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.logoHint}>Shown at ~72×72 on login, 28×28 in the sidebar.</Text>
+              </View>
             </View>
 
             <FormField
@@ -316,6 +360,7 @@ function makeStyles(colors: ThemeColors) {
       overflow: 'hidden',
     },
     logoImg: { width: 64, height: 64 },
+    logoHint: { color: colors.textMuted, fontSize: 11, lineHeight: 15 },
     secondaryBtn: {
       borderRadius: spacing.btnRadius,
       paddingVertical: spacing.btnPadV,

@@ -198,8 +198,22 @@ export const api = {
     request('/api/settings/branding', { method: 'PATCH', body }),
   uploadLogo: async (uri: string, name: string, mimeType?: string, fileObj?: any) => {
     const form = new FormData();
-    if (fileObj) {
-      form.append('logo', fileObj);
+    if (Platform.OS === 'web') {
+      let blob: Blob;
+      if (fileObj instanceof Blob) blob = fileObj;
+      else {
+        const res = await fetch(uri);
+        blob = await res.blob();
+      }
+      const filename = name || 'logo.png';
+      try {
+        form.append(
+          'logo',
+          new File([blob], filename, { type: mimeType || blob.type || 'image/png' })
+        );
+      } catch {
+        form.append('logo', blob, filename);
+      }
     } else {
       form.append('logo', {
         uri,
