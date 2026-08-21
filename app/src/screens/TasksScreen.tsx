@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api, statusLabel } from '../api';
-import { useTheme, ThemeColors, statusColors, spacing, listCardLayoutFor } from '../theme';
+import { useTheme, ThemeColors, statusColors, spacing, listLayoutFor } from '../theme';
 import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
@@ -22,7 +22,8 @@ export default function TasksScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
+  const layout = useMemo(() => listLayoutFor(width), [width]);
+  const styles = useMemo(() => makeStyles(colors, layout), [colors, layout]);
   const { confirm, dialog } = useConfirm();
   const [tasks, setTasks] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,6 +59,7 @@ export default function TasksScreen({ navigation }: any) {
           <FlatList
             data={tasks}
             keyExtractor={(item) => item.id}
+            style={styles.list}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
             }
@@ -85,7 +87,7 @@ export default function TasksScreen({ navigation }: any) {
                   </Text>
                   </View>
                 </View>
-                <Text style={styles.meta} numberOfLines={1}>
+                <Text style={styles.meta} numberOfLines={2}>
                   {item.description || 'No description'}
                 </Text>
                 <Text style={styles.meta}>
@@ -162,17 +164,12 @@ export default function TasksScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors, width: number) {
+function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor>) {
   return StyleSheet.create({
-    root: { flex: 1, backgroundColor: colors.bg },
+    root: { flex: 1, backgroundColor: colors.bg, minWidth: 0, overflow: 'hidden' },
+    list: { flex: 1, width: '100%', minWidth: 0 },
     grid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.cardGap,
-      padding: width < 700 ? 10 : 12,
-      paddingBottom: 100,
-      alignItems: 'flex-start',
-      width: '100%',
+      ...layout.grid,
     },
     card: {
       backgroundColor: colors.bgCard,
@@ -180,13 +177,15 @@ function makeStyles(colors: ThemeColors, width: number) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayoutFor(width),
+      ...layout.card,
     },
     row: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       gap: 8,
       alignItems: 'center',
+      width: '100%',
+      minWidth: 0,
     },
     cardTitle: {
       color: colors.text,
@@ -208,7 +207,13 @@ function makeStyles(colors: ThemeColors, width: number) {
       fontWeight: '700',
       textTransform: 'capitalize',
     },
-    meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
+    meta: {
+      color: colors.textMuted,
+      marginTop: 4,
+      fontSize: 12,
+      width: '100%',
+      flexShrink: 1,
+    },
     empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40, width: '100%' },
     fabRow: {
       position: 'absolute',

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
-import { useTheme, ThemeColors, spacing, listCardLayoutFor } from '../theme';
+import { useTheme, ThemeColors, spacing, listLayoutFor } from '../theme';
 import AppShell from '../components/AppShell';
 import LoadingView from '../components/LoadingView';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -21,7 +21,8 @@ import { onAppNotify } from '../notifyBus';
 export default function NotificationsScreen({ navigation }: any) {
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
+  const layout = useMemo(() => listLayoutFor(width), [width]);
+  const styles = useMemo(() => makeStyles(colors, layout), [colors, layout]);
   const [items, setItems] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -77,6 +78,7 @@ export default function NotificationsScreen({ navigation }: any) {
           <FlatList
             data={items}
             keyExtractor={(item) => item.id}
+            style={styles.list}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
             }
@@ -101,11 +103,12 @@ export default function NotificationsScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors, width: number) {
+function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor>) {
   return StyleSheet.create({
-    root: { flex: 1 },
+    root: { flex: 1, minWidth: 0, overflow: 'hidden' },
+    list: { flex: 1, width: '100%', minWidth: 0 },
     header: {
-      paddingHorizontal: 16,
+      paddingHorizontal: layout.pad,
       paddingTop: 12,
       gap: 8,
     },
@@ -118,12 +121,7 @@ function makeStyles(colors: ThemeColors, width: number) {
     },
     link: { color: colors.accent, fontWeight: '700' },
     grid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.cardGap,
-      padding: width < 700 ? 10 : 16,
-      paddingBottom: 40,
-      alignItems: 'flex-start',
+      ...layout.grid,
     },
     card: {
       backgroundColor: colors.bgCard,
@@ -131,10 +129,10 @@ function makeStyles(colors: ThemeColors, width: number) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayoutFor(width),
+      ...layout.card,
     },
     unread: { borderColor: colors.accent },
-    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
+    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15, minWidth: 0 },
     meta: { color: colors.textMuted, marginTop: 4, lineHeight: 18, fontSize: 12 },
     time: { color: colors.textMuted, marginTop: 8, fontSize: 11 },
     empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40, width: '100%' },

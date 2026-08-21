@@ -100,30 +100,81 @@ export const spacing = {
   labelFont: 12,
 };
 
-/** Phone: full-width stack. Wider screens: wrapping multi-column cards. */
-export function listCardLayoutFor(width: number) {
-  const phone = width < 700;
-  if (phone) {
-    return {
-      width: '100%' as const,
-      maxWidth: '100%' as const,
-      alignSelf: 'stretch' as const,
-      flexGrow: 0,
-      flexShrink: 0,
-      flexBasis: 'auto' as const,
-      minWidth: 0,
-    };
-  }
+/** Phone breakpoint — match AppShell collapsed rail beside content */
+export const PHONE_MAX = 700;
+export const SIDEBAR_RAIL = 56;
+
+/**
+ * List grids: phones = single full-width column (no row-wrap — that breaks
+ * height/overflow in Android WebView). Wider screens = wrapping cards.
+ */
+export function listLayoutFor(width: number) {
+  const phone = width < PHONE_MAX;
+  const pad = phone ? 10 : 12;
+  const gap = spacing.cardGap;
+  // Content column sits next to the 56px icon rail on phones
+  const cardWidth = Math.max(200, width - SIDEBAR_RAIL - pad * 2);
+
   return {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: 280,
-    maxWidth: 400,
-    minWidth: 0,
+    phone,
+    pad,
+    gap,
+    cardWidth,
+    grid: phone
+      ? ({
+          flexDirection: 'column',
+          flexWrap: 'nowrap',
+          alignItems: 'stretch',
+          alignContent: 'flex-start',
+          paddingHorizontal: pad,
+          paddingTop: pad,
+          paddingBottom: 100,
+          gap,
+          width: '100%',
+          maxWidth: '100%',
+        } as const)
+      : ({
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'flex-start',
+          alignContent: 'flex-start',
+          paddingHorizontal: pad,
+          paddingTop: pad,
+          paddingBottom: 40,
+          gap,
+          width: '100%',
+          maxWidth: '100%',
+        } as const),
+    card: phone
+      ? ({
+          width: cardWidth,
+          maxWidth: cardWidth,
+          alignSelf: 'center',
+          flexGrow: 0,
+          flexShrink: 0,
+          flexBasis: 'auto',
+          minWidth: 0,
+          minHeight: 0,
+          overflow: 'hidden',
+        } as const)
+      : ({
+          flexGrow: 1,
+          flexShrink: 1,
+          flexBasis: 280,
+          maxWidth: 400,
+          minWidth: 0,
+          minHeight: 0,
+          overflow: 'hidden',
+        } as const),
   };
 }
 
-/** @deprecated Prefer listCardLayoutFor(width) */
+/** @deprecated Prefer listLayoutFor(width).card */
+export function listCardLayoutFor(width: number) {
+  return listLayoutFor(width).card;
+}
+
+/** @deprecated Prefer listLayoutFor(width).card */
 export const listCardLayout = {
   flexGrow: 1,
   flexShrink: 1,

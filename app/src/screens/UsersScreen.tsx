@@ -12,7 +12,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { api, ApiError } from '../api';
 import { useAuth } from '../auth';
-import { useTheme, ThemeColors, spacing, listCardLayoutFor } from '../theme';
+import { useTheme, ThemeColors, spacing, listLayoutFor } from '../theme';
 import AppShell from '../components/AppShell';
 import PasswordField from '../components/PasswordField';
 import FormField from '../components/FormField';
@@ -24,7 +24,8 @@ export default function UsersScreen({ navigation }: any) {
   const { can } = useAuth();
   const { colors } = useTheme();
   const { width } = useWindowDimensions();
-  const styles = useMemo(() => makeStyles(colors, width), [colors, width]);
+  const layout = useMemo(() => listLayoutFor(width), [width]);
+  const styles = useMemo(() => makeStyles(colors, layout), [colors, layout]);
   const { confirm, dialog } = useConfirm();
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
@@ -255,6 +256,7 @@ export default function UsersScreen({ navigation }: any) {
           <FlatList
             data={users}
             keyExtractor={(item) => item.id}
+            style={styles.list}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
             }
@@ -296,22 +298,18 @@ export default function UsersScreen({ navigation }: any) {
   );
 }
 
-function makeStyles(colors: ThemeColors, width: number) {
+function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor>) {
   return StyleSheet.create({
-    root: { flex: 1 },
+    root: { flex: 1, minWidth: 0, overflow: 'hidden' },
+    list: { flex: 1, width: '100%', minWidth: 0 },
     toolbar: {
-      paddingHorizontal: 16,
+      paddingHorizontal: layout.pad,
       paddingTop: 16,
       paddingBottom: 4,
     },
     grid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: spacing.cardGap,
-      paddingHorizontal: 16,
-      paddingBottom: 40,
+      ...layout.grid,
       paddingTop: 8,
-      alignItems: 'flex-start',
     },
     msg: {
       color: colors.accent,
@@ -375,9 +373,9 @@ function makeStyles(colors: ThemeColors, width: number) {
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...listCardLayoutFor(width),
+      ...layout.card,
     },
-    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15 },
+    cardTitle: { color: colors.text, fontWeight: '700', fontSize: 15, minWidth: 0 },
     meta: { color: colors.textMuted, marginTop: 4, fontSize: 12 },
     actions: { flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' },
     mini: {
