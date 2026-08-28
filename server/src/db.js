@@ -1,5 +1,8 @@
-const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
 const { createDefaultRoles } = require('./permissions');
@@ -81,6 +84,11 @@ function getD1Config() {
   if (accountId && databaseId && apiToken) {
     return { accountId, databaseId, apiToken };
   }
+  console.log('[DB Config Check] Cloudflare D1 environment variables missing/incomplete:', {
+    hasAccountId: Boolean(accountId),
+    hasDatabaseId: Boolean(databaseId),
+    hasApiToken: Boolean(apiToken)
+  });
   return null;
 }
 
@@ -90,8 +98,6 @@ function getD1Config() {
  * TEAMTASK_SQLITE=/abs/or/rel/path.db → that file
  */
 function getSqlitePath() {
-  // If Cloudflare D1 is configured, ignore TEAMTASK_SQLITE so D1 takes precedence
-  if (getD1Config()) return '';
   const raw = (process.env.TEAMTASK_SQLITE || process.env.SQLITE_PATH || '').trim();
   if (!raw || raw === '0' || /^false$/i.test(raw)) return '';
   if (raw === '1' || /^true$/i.test(raw)) {

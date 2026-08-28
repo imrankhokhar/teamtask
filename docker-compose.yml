@@ -6,20 +6,17 @@ services:
     restart: unless-stopped
     ports:
       - "${PORT:-4000}:4000"
+    env_file:
+      - .env
     environment:
       NODE_ENV: production
       HOST: "0.0.0.0"
       PORT: "4000"
-      CLOUDFLARE_ACCOUNT_ID: "${CLOUDFLARE_ACCOUNT_ID:-}"
-      CLOUDFLARE_D1_DATABASE_ID: "${CLOUDFLARE_D1_DATABASE_ID:-}"
-      CLOUDFLARE_D1_API_TOKEN: "${CLOUDFLARE_D1_API_TOKEN:-}"
       TEAMTASK_DATA_DIR: /app/data
       TEAMTASK_UPLOADS_DIR: /app/data/uploads
       TEAMTASK_WEB_DIST: /app/web
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      TEAMTASK_PUBLIC_URL: ${TEAMTASK_PUBLIC_URL:-http://localhost:4000}
     volumes:
-      # SQLite + uploads survive container rebuilds
+      # Uploads and files survive container rebuilds
       - teamtask-data:/app/data
 
 volumes:

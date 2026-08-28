@@ -1,8 +1,10 @@
+const path = require('path');
 require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const path = require('path');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
@@ -1976,6 +1978,7 @@ wss.on('connection', (ws, req) => {
 
 async function boot() {
   try {
+    console.log('[Boot] Initializing TeamTask database...');
     await initDb();
   } catch (err) {
     const msg = [err && err.code, err && err.message].filter(Boolean).join(' ') || String(err);
