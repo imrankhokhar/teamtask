@@ -3,10 +3,10 @@ import { AppState, Platform } from 'react-native';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { Audio } from 'expo-av';
 import { api, getApiBaseUrl, refreshApiUrl } from './api';
 import { useAuth, AppSettings } from './auth';
 import { emitAppNotify } from './notifyBus';
+import { playSoundWithFallback, ToneType } from './soundPlayer';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -134,7 +134,6 @@ function showWebBanner(n: { id?: string; title: string; body: string; taskId?: s
 
 export function useRealtimeNotifications(onNotify?: (n: any) => void) {
   const { token, settings, setSettings } = useAuth();
-  const soundRef = useRef<Audio.Sound | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const hasPushRef = useRef(false);
   const settingsRef = useRef(settings);
@@ -152,13 +151,20 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
 
     async function playTone(type?: string) {
       const ringtoneUrl = toneForNotification(type || '', settingsRef.current);
-      if (!ringtoneUrl) return;
+      let toneKind: ToneType = 'notification';
+      if (type === 'reminder_due' || type === 'reminder_set') {
+        toneKind = 'reminder';
+      } else if (
+        type === 'checklist_added' ||
+        type === 'checklist_checked' ||
+        type === 'checklist_unchecked' ||
+        type === 'checklist_reply' ||
+        type === 'status_changed'
+      ) {
+        toneKind = 'alert';
+      }
       try {
-        const base = await getApiBaseUrl();
-        const uri = ringtoneUrl.startsWith('http') ? ringtoneUrl : `${base}${ringtoneUrl}`;
-        if (soundRef.current) await soundRef.current.unloadAsync();
-        const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-        soundRef.current = sound;
+        await playSoundWithFallback(ringtoneUrl, toneKind);
       } catch {
         // ignore
       }

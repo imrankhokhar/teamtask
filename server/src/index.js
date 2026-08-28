@@ -82,7 +82,18 @@ const upload = multer({
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
-app.use('/uploads', express.static(UPLOADS));
+app.use(
+  '/uploads',
+  express.static(UPLOADS, {
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Accept-Ranges', 'bytes');
+    },
+  })
+);
+app.use('/uploads', (_req, res) => {
+  res.status(404).json({ error: 'File not found' });
+});
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 function publicUser(u, db) {

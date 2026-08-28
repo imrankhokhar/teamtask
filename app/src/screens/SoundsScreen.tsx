@@ -9,12 +9,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import { Audio } from 'expo-av';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { api, getApiBaseUrl } from '../api';
 import { useTheme, ThemeColors, spacing } from '../theme';
 import { useAuth } from '../auth';
 import AppShell from '../components/AppShell';
+import { playSoundWithFallback, stopCurrentSound, ToneType } from '../soundPlayer';
 
 type ToneKind = 'notification' | 'alert' | 'reminder';
 
@@ -45,15 +45,14 @@ export default function SoundsScreen({ navigation }: any) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [busyKind, setBusyKind] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [storage, setStorage] = useState<any>(null);
 
   useEffect(() => {
     api.storageInfo().then(setStorage).catch(() => undefined);
     return () => {
-      sound?.unloadAsync().catch(() => undefined);
+      stopCurrentSound().catch(() => undefined);
     };
-  }, [sound]);
+  }, []);
 
   function toneName(kind: ToneKind) {
     if (kind === 'notification') return settings.notificationToneName || settings.ringtoneName;
@@ -96,16 +95,13 @@ export default function SoundsScreen({ navigation }: any) {
 
   async function preview(kind: ToneKind) {
     const url = toneUrl(kind);
-    if (!url) {
-      setMsg('No tone uploaded for this type yet');
-      return;
-    }
     try {
-      const base = await getApiBaseUrl();
-      const uri = url.startsWith('http') ? url : `${base}${url}`;
-      if (sound) await sound.unloadAsync();
-      const created = await Audio.Sound.createAsync({ uri }, { shouldPlay: true });
-      setSound(created.sound);
+      const res = await playSoundWithFallback(url, kind);
+      if (res.note) {
+        setMsg(res.note);
+      } else {
+        setMsg(`Playing ${kind} tone`);
+      }
     } catch (e: any) {
       setMsg(e.message || 'Preview failed');
     }
