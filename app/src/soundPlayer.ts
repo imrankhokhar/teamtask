@@ -110,51 +110,65 @@ export async function playSoundWithFallback(
   const uri = rawUrl.startsWith('http') ? rawUrl : `${base}${rawUrl}`;
 
   // On Web, use standard HTML5 Audio with instant fallback on error
-  if (Platform.OS === 'web' && typeof Audio !== 'undefined') {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
     return new Promise((resolve) => {
       let resolved = false;
-      const audio = new (window as any).Audio(uri);
-      activeWebAudio = audio;
 
       const finishFallback = (msg?: string) => {
         if (resolved) return;
         resolved = true;
         playSyntheticChime(type);
-        resolve({ customPlayed: false, note: msg || 'Playing default chime (custom tone unavailable)' });
+        resolve({ customPlayed: false, note: msg || 'Playing default chime' });
       };
 
-      audio.onended = () => {
-        if (!resolved) {
-          resolved = true;
-          resolve({ customPlayed: true });
+      try {
+        const AudioClass = (window as any).Audio;
+        if (!AudioClass) {
+          return finishFallback();
         }
-      };
 
-      audio.onerror = () => {
-        finishFallback('Audio file could not be loaded; playing default chime');
-      };
+        const audio = new AudioClass();
+        activeWebAudio = audio;
 
-      // Autoplay timeout guard (if browser blocks or network stalls)
-      const timeout = setTimeout(() => {
-        if (!resolved && audio.paused) {
-          finishFallback();
-        }
-      }, 2500);
+        audio.crossOrigin = 'anonymous';
+        audio.preload = 'auto';
 
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            clearTimeout(timeout);
-            if (!resolved) {
-              resolved = true;
-              resolve({ customPlayed: true });
-            }
-          })
-          .catch(() => {
-            clearTimeout(timeout);
+        audio.onended = () => {
+          if (!resolved) {
+            resolved = true;
+            resolve({ customPlayed: true });
+          }
+        };
+
+        audio.onerror = () => {
+          finishFallback('Audio could not be loaded; playing default chime');
+        };
+
+        // Autoplay timeout guard (if browser blocks or network stalls)
+        const timeout = setTimeout(() => {
+          if (!resolved && (!audio || audio.paused)) {
             finishFallback();
-          });
+          }
+        }, 3000);
+
+        audio.src = uri;
+        const playPromise = audio.play();
+        if (playPromise !== undefined && typeof playPromise.then === 'function') {
+          playPromise
+            .then(() => {
+              clearTimeout(timeout);
+              if (!resolved) {
+                resolved = true;
+                resolve({ customPlayed: true });
+              }
+            })
+            .catch(() => {
+              clearTimeout(timeout);
+              finishFallback();
+            });
+        }
+      } catch {
+        finishFallback();
       }
     });
   }

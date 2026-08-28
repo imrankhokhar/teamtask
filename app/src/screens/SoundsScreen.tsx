@@ -96,6 +96,7 @@ export default function SoundsScreen({ navigation }: any) {
   async function preview(kind: ToneKind) {
     const url = toneUrl(kind);
     try {
+      setMsg('');
       const res = await playSoundWithFallback(url, kind);
       if (res.note) {
         setMsg(res.note);
@@ -103,7 +104,7 @@ export default function SoundsScreen({ navigation }: any) {
         setMsg(`Playing ${kind} tone`);
       }
     } catch (e: any) {
-      setMsg(e.message || 'Preview failed');
+      setMsg(e?.message || 'Playing default chime');
     }
   }
 
