@@ -181,6 +181,8 @@ export const api = {
     request(`/api/tasks/${id}`, { method: 'PATCH', body }),
   addChecklist: (taskId: string, text: string) =>
     request(`/api/tasks/${taskId}/checklist`, { method: 'POST', body: { text } }),
+  updateChecklistItem: (id: string, text: string) =>
+    request(`/api/checklist/${id}`, { method: 'PATCH', body: { text } }),
   deleteChecklistItem: (id: string) =>
     request(`/api/checklist/${id}`, { method: 'DELETE' }),
   checkItem: (id: string) =>

@@ -337,7 +337,7 @@ export default function TaskDetailScreen({ route, navigation }: any) {
                   <Text style={styles.miniBtnText}>Unmark + reason</Text>
                 </TouchableOpacity>
               )}
-              {isAdmin ? (
+              {isAdmin || can('tasks.edit') ? (
                 <TouchableOpacity
                   style={[styles.miniBtn, styles.dangerBtn]}
                   onPress={() => deleteChecklistItem(item)}

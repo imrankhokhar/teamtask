@@ -70,6 +70,10 @@ export default function CreateTaskScreen({ navigation, route }: any) {
   const [checklistText, setChecklistText] = useState('');
   const [checklist, setChecklist] = useState<string[]>([]);
   const [existingChecklist, setExistingChecklist] = useState<any[]>([]);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItemText, setEditingItemText] = useState('');
+  const [editingDraftIdx, setEditingDraftIdx] = useState<number | null>(null);
+  const [editingDraftText, setEditingDraftText] = useState('');
   const [remindersLocal, setRemindersLocal] = useState<string[]>(['']);
   const [pickerIndex, setPickerIndex] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
@@ -194,6 +198,37 @@ export default function CreateTaskScreen({ navigation, route }: any) {
     setChecklistText('');
   }
 
+  function startEditExisting(item: any) {
+    setEditingItemId(item.id);
+    setEditingItemText(item.text);
+  }
+
+  async function saveEditExisting(item: any) {
+    const text = editingItemText.trim();
+    if (!text) return;
+    try {
+      await api.updateChecklistItem(item.id, text);
+      setExistingChecklist((list) =>
+        list.map((c) => (c.id === item.id ? { ...c, text } : c))
+      );
+      setEditingItemId(null);
+    } catch (e: any) {
+      showMsg(e.message || 'Failed to update checklist item', true);
+    }
+  }
+
+  function startEditDraft(idx: number, text: string) {
+    setEditingDraftIdx(idx);
+    setEditingDraftText(text);
+  }
+
+  function saveEditDraft(idx: number) {
+    const text = editingDraftText.trim();
+    if (!text) return;
+    setChecklist((list) => list.map((c, i) => (i === idx ? text : c)));
+    setEditingDraftIdx(null);
+  }
+
   async function deleteExistingChecklistItem(item: any) {
     const ok = await confirm({
       title: 'Delete checklist item',
@@ -313,31 +348,115 @@ export default function CreateTaskScreen({ navigation, route }: any) {
               <View style={[styles.box, item.isChecked && styles.boxOn]}>
                 {item.isChecked ? <Text style={styles.tick}>✓</Text> : null}
               </View>
-              <Text style={[styles.checkItemText, item.isChecked && styles.checkDone]}>
-                {item.text}
-              </Text>
-              <Text style={styles.checkState}>{item.isChecked ? 'Marked' : 'Unmarked'}</Text>
-              {isAdmin ? (
-                <TouchableOpacity
-                  onPress={() => deleteExistingChecklistItem(item)}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityLabel="Delete checklist item"
-                >
-                  <Ionicons name="trash-outline" size={16} color={colors.danger} />
-                </TouchableOpacity>
-              ) : null}
+              {editingItemId === item.id ? (
+                <View style={styles.inlineEditRow}>
+                  <TextInput
+                    style={styles.inlineInput}
+                    value={editingItemText}
+                    onChangeText={setEditingItemText}
+                    autoFocus
+                    placeholder="Checklist item text"
+                    placeholderTextColor={colors.textMuted}
+                    onSubmitEditing={() => saveEditExisting(item)}
+                  />
+                  <TouchableOpacity
+                    style={[styles.actionIconBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => saveEditExisting(item)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Save edit"
+                  >
+                    <Ionicons name="checkmark" size={16} color={colors.onAccent} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionIconBtn, { backgroundColor: colors.bgElevated }]}
+                    onPress={() => setEditingItemId(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Cancel edit"
+                  >
+                    <Ionicons name="close" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.checkItemText, item.isChecked && styles.checkDone]}>
+                    {item.text}
+                  </Text>
+                  <Text style={styles.checkState}>{item.isChecked ? 'Marked' : 'Unmarked'}</Text>
+                  <View style={styles.checkActions}>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => startEditExisting(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Edit checklist item"
+                    >
+                      <Ionicons name="pencil-outline" size={16} color={colors.info} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => deleteExistingChecklistItem(item)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Delete checklist item"
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           ))
         : checklist.map((c, i) => (
-            <View key={i} style={styles.checkLineRow}>
-              <Text style={styles.checkLine}>• {c}</Text>
-              <TouchableOpacity
-                onPress={() => setChecklist((list) => list.filter((_, idx) => idx !== i))}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel="Remove checklist item"
-              >
-                <Ionicons name="close-outline" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
+            <View key={i} style={styles.checkItem}>
+              {editingDraftIdx === i ? (
+                <View style={styles.inlineEditRow}>
+                  <TextInput
+                    style={styles.inlineInput}
+                    value={editingDraftText}
+                    onChangeText={setEditingDraftText}
+                    autoFocus
+                    placeholder="Checklist point"
+                    placeholderTextColor={colors.textMuted}
+                    onSubmitEditing={() => saveEditDraft(i)}
+                  />
+                  <TouchableOpacity
+                    style={[styles.actionIconBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => saveEditDraft(i)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Save point"
+                  >
+                    <Ionicons name="checkmark" size={16} color={colors.onAccent} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.actionIconBtn, { backgroundColor: colors.bgElevated }]}
+                    onPress={() => setEditingDraftIdx(null)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Cancel edit"
+                  >
+                    <Ionicons name="close" size={16} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <Text style={styles.checkItemText}>• {c}</Text>
+                  <View style={styles.checkActions}>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => startEditDraft(i, c)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Edit checklist item"
+                    >
+                      <Ionicons name="pencil-outline" size={16} color={colors.info} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionIconBtn}
+                      onPress={() => setChecklist((list) => list.filter((_, idx) => idx !== i))}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityLabel="Remove checklist item"
+                    >
+                      <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
             </View>
           ))}
       {editing && existingChecklist.length === 0 ? (
@@ -513,6 +632,35 @@ function makeStyles(colors: ThemeColors) {
     checkItemText: { color: colors.text, fontSize: 14, fontWeight: '600', flex: 1, minWidth: 0 },
     checkDone: { textDecorationLine: 'line-through', color: colors.textMuted },
     checkState: { color: colors.textMuted, fontSize: 11, fontWeight: '700' },
+    checkActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    actionIconBtn: {
+      padding: 6,
+      borderRadius: 6,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    inlineEditRow: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    inlineInput: {
+      flex: 1,
+      backgroundColor: colors.bgElevated,
+      borderWidth: 1,
+      borderColor: colors.accent,
+      borderRadius: spacing.inputRadius,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      color: colors.text,
+      fontSize: 13,
+      minHeight: 32,
+    },
     box: {
       width: 20,
       height: 20,

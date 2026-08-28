@@ -1269,11 +1269,40 @@ app.post('/api/tasks/:id/checklist', authRequired, async (req, res) => {
   res.status(201).json({ item });
 });
 
-app.delete('/api/checklist/:id', authRequired, adminRequired, (req, res) => {
+app.patch('/api/checklist/:id', authRequired, (req, res) => {
+  const itemId = req.params.id;
+  const { text } = req.body || {};
+  if (!text || !text.trim()) {
+    return res.status(400).json({ error: 'text is required' });
+  }
+  const db0 = readDb();
+  const item0 = db0.checklistItems.find((c) => c.id === itemId);
+  if (!item0) return res.status(404).json({ error: 'Checklist item not found' });
+  if (!req.isAdmin && !hasPermission(db0, req.user, 'tasks.edit')) {
+    return res.status(403).json({ error: 'Permission denied' });
+  }
+
+  let item;
+  updateDb((db) => {
+    item = db.checklistItems.find((c) => c.id === itemId);
+    if (item) {
+      item.text = text.trim();
+      const task = db.tasks.find((t) => t.id === item.taskId);
+      if (task) task.updatedAt = new Date().toISOString();
+    }
+  });
+
+  res.json({ item });
+});
+
+app.delete('/api/checklist/:id', authRequired, (req, res) => {
   const itemId = req.params.id;
   const db0 = readDb();
   const item0 = db0.checklistItems.find((c) => c.id === itemId);
   if (!item0) return res.status(404).json({ error: 'Checklist item not found' });
+  if (!req.isAdmin && !hasPermission(db0, req.user, 'tasks.edit') && !hasPermission(db0, req.user, 'tasks.delete')) {
+    return res.status(403).json({ error: 'Permission denied' });
+  }
 
   updateDb((db) => {
     db.checklistItems = db.checklistItems.filter((c) => c.id !== itemId);
