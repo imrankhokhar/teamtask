@@ -18,11 +18,14 @@ const DB_PATH = path.join(DATA_DIR, 'db.json');
 /** @type {object|null} */
 let memoryDb = null;
 
-/** @type {'postgres'|'mongodb'|'file'|null} */
+/** @type {'postgres'|'mongodb'|'sqlite'|'file'|null} */
 let storeMode = null;
 
 /** @type {import('pg').Pool|null} */
 let pgPool = null;
+
+/** @type {import('better-sqlite3').Database|null} */
+let sqliteDb = null;
 
 /** @type {import('mongodb').MongoClient|null} */
 let mongoClient = null;
@@ -46,8 +49,22 @@ function getMongoUri() {
   return (process.env.MONGODB_URI || process.env.TEAMTASK_MONGODB_URI || '').trim();
 }
 
+/**
+ * SQLite path when enabled.
+ * TEAMTASK_SQLITE=1 → ./data/teamtask.sqlite
+ * TEAMTASK_SQLITE=/abs/or/rel/path.db → that file
+ */
+function getSqlitePath() {
+  const raw = (process.env.TEAMTASK_SQLITE || process.env.SQLITE_PATH || '').trim();
+  if (!raw || raw === '0' || /^false$/i.test(raw)) return '';
+  if (raw === '1' || /^true$/i.test(raw)) {
+    return path.join(DATA_DIR, 'teamtask.sqlite');
+  }
+  return path.isAbsolute(raw) ? raw : path.resolve(process.cwd(), raw);
+}
+
 function isCloudDbConfigured() {
-  return Boolean(getPostgresUri() || getMongoUri());
+  return Boolean(getPostgresUri() || getMongoUri() || getSqlitePath());
 }
 
 function createSeededDb() {
@@ -212,9 +229,27 @@ async function flushMongo() {
   );
 }
 
+function flushSqlite() {
+  if (!sqliteDb || !memoryDb || !remoteDirty) return;
+  remoteDirty = false;
+  const data = clone(memoryDb);
+  sqliteDb
+    .prepare(
+      `INSERT INTO appstate (id, data, updated_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(id) DO UPDATE SET
+         data = excluded.data,
+         updated_at = datetime('now')`
+    )
+    .run(DOC_ID, JSON.stringify(data));
+}
+
 async function flushRemote() {
   if (storeMode === 'postgres') return flushPostgres();
   if (storeMode === 'mongodb') return flushMongo();
+  if (storeMode === 'sqlite') {
+    flushSqlite();
+  }
 }
 
 function scheduleRemoteFlush() {
@@ -228,11 +263,24 @@ function scheduleRemoteFlush() {
 
 async function initPostgres(uri) {
   const { Pool } = require('pg');
+  // Avoid pg sslmode warning: set SSL in Pool options, strip sslmode from URI.
+  let connectionString = uri;
+  try {
+    const u = new URL(uri);
+    u.searchParams.delete('sslmode');
+    u.searchParams.set('uselibpqcompat', 'true');
+    connectionString = u.toString();
+  } catch {
+    // keep original uri
+  }
   pgPool = new Pool({
-    connectionString: uri,
-    ssl: uri.includes('sslmode=require') || uri.includes('neon.tech') || uri.includes('supabase')
-      ? { rejectUnauthorized: false }
-      : undefined,
+    connectionString,
+    connectionTimeoutMillis: 12_000,
+    ssl:
+      /sslmode=require|neon\.tech|supabase|amazonaws\.com/i.test(uri) ||
+      process.env.PGSSLMODE === 'require'
+        ? { rejectUnauthorized: false }
+        : undefined,
   });
 
   await pgPool.query(`
@@ -284,17 +332,79 @@ async function initMongo(uri) {
   return { mode: 'mongodb' };
 }
 
-/**
- * Call once before accepting traffic.
- * Priority: DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
- */
-async function initDb() {
-  const pgUri = getPostgresUri();
-  if (pgUri) return initPostgres(pgUri);
+function loadSeedOrJsonFile() {
+  if (fs.existsSync(DB_PATH)) {
+    try {
+      const current = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
+      if (current && Array.isArray(current.users) && current.users.length) {
+        return current;
+      }
+    } catch {
+      // fall through to seed
+    }
+  }
+  return createSeededDb();
+}
 
-  const mongoUri = getMongoUri();
-  if (mongoUri) return initMongo(mongoUri);
+async function initSqlite(dbPath) {
+  const Database = require('better-sqlite3');
+  fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  sqliteDb = new Database(dbPath);
+  sqliteDb.pragma('journal_mode = WAL');
+  sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS appstate (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
 
+  const row = sqliteDb.prepare('SELECT data FROM appstate WHERE id = ?').get(DOC_ID);
+  if (row?.data) {
+    const parsed = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+    if (parsed && Array.isArray(parsed.users) && parsed.users.length) {
+      memoryDb = parsed;
+    } else {
+      memoryDb = loadSeedOrJsonFile();
+      remoteDirty = true;
+      flushSqlite();
+    }
+  } else {
+    memoryDb = loadSeedOrJsonFile();
+    remoteDirty = true;
+    flushSqlite();
+  }
+  if (migrateDb(memoryDb)) {
+    remoteDirty = true;
+    flushSqlite();
+  }
+  storeMode = 'sqlite';
+  console.log('TeamTask data store: SQLite', dbPath);
+  return { mode: 'sqlite' };
+}
+
+function allowFileFallback() {
+  const flag = String(process.env.TEAMTASK_DB_FALLBACK || '').trim().toLowerCase();
+  if (flag === 'file' || flag === 'local') return true;
+  if (flag === 'none' || flag === 'off') return false;
+  // Local `npm run server` (development) should not die if Neon is unreachable.
+  return process.env.NODE_ENV !== 'production';
+}
+
+function formatDbError(err) {
+  if (!err) return 'unknown error';
+  const parts = [err.code, err.message].filter(Boolean);
+  if (err.errors && err.errors.length) {
+    const nested = err.errors
+      .map((e) => e.code || e.message)
+      .filter(Boolean)
+      .slice(0, 3);
+    if (nested.length) parts.push(`(${nested.join(', ')})`);
+  }
+  return parts.join(' ') || String(err);
+}
+
+async function initFileStore() {
   ensureFileDb();
   memoryDb = JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
   if (migrateDb(memoryDb)) {
@@ -303,6 +413,58 @@ async function initDb() {
   storeMode = 'file';
   console.log('TeamTask data store: local file', DB_PATH);
   return { mode: 'file' };
+}
+
+/**
+ * Call once before accepting traffic.
+ * Priority: TEAMTASK_SQLITE → DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
+ * In development, unreachable cloud DB falls back to local file unless
+ * TEAMTASK_DB_FALLBACK=none.
+ */
+async function initDb() {
+  const sqlitePath = getSqlitePath();
+  if (sqlitePath) return initSqlite(sqlitePath);
+
+  const pgUri = getPostgresUri();
+  if (pgUri) {
+    try {
+      return await initPostgres(pgUri);
+    } catch (err) {
+      if (pgPool) {
+        await pgPool.end().catch(() => undefined);
+        pgPool = null;
+      }
+      if (!allowFileFallback()) throw err;
+      console.warn(
+        'Postgres unreachable:',
+        formatDbError(err),
+        '— falling back to local file DB. Set TEAMTASK_DB_FALLBACK=none to disable.'
+      );
+      return initFileStore();
+    }
+  }
+
+  const mongoUri = getMongoUri();
+  if (mongoUri) {
+    try {
+      return await initMongo(mongoUri);
+    } catch (err) {
+      if (mongoClient) {
+        await mongoClient.close().catch(() => undefined);
+        mongoClient = null;
+        mongoCol = null;
+      }
+      if (!allowFileFallback()) throw err;
+      console.warn(
+        'MongoDB unreachable:',
+        formatDbError(err),
+        '— falling back to local file DB. Set TEAMTASK_DB_FALLBACK=none to disable.'
+      );
+      return initFileStore();
+    }
+  }
+
+  return initFileStore();
 }
 
 function readDb() {
@@ -317,7 +479,7 @@ function readDb() {
 
 function writeDb(db) {
   memoryDb = db;
-  if (storeMode === 'postgres' || storeMode === 'mongodb') {
+  if (storeMode === 'postgres' || storeMode === 'mongodb' || storeMode === 'sqlite') {
     scheduleRemoteFlush();
     return;
   }
@@ -347,6 +509,14 @@ async function closeDb() {
     mongoClient = null;
     mongoCol = null;
   }
+  if (sqliteDb) {
+    try {
+      sqliteDb.close();
+    } catch {
+      // ignore
+    }
+    sqliteDb = null;
+  }
   storeMode = null;
 }
 
@@ -358,6 +528,7 @@ module.exports = {
   updateDb,
   isCloudDbConfigured,
   getPostgresUri,
+  getSqlitePath,
   DB_PATH,
   DATA_DIR,
   createSeededDb,

@@ -1967,17 +1967,33 @@ async function boot() {
   try {
     await initDb();
   } catch (err) {
-    console.error('Database init failed:', err.message);
+    const msg = [err && err.code, err && err.message].filter(Boolean).join(' ') || String(err);
+    console.error('Database init failed:', msg);
+    if (err && err.errors && err.errors.length) {
+      for (const e of err.errors.slice(0, 3)) {
+        console.error('  →', e.code || '', e.message || e);
+      }
+    }
+    console.error(
+      'Tip: for local dev, comment out DATABASE_URL in server/.env to use the file DB, or fix Neon network access (port 5432).'
+    );
     process.exit(1);
   }
-  server.listen(PORT, '127.0.0.1', () => {
-    console.log(`TeamTask API running on http://127.0.0.1:${PORT}`);
+  const host = process.env.HOST || process.env.BIND_HOST || '127.0.0.1';
+  server.listen(PORT, host, () => {
+    console.log(`TeamTask API running on http://${host}:${PORT}`);
   });
 }
 
-server.on('error', (err) => {
-  console.error('Server listen error:', err.message);
+function onListenError(err) {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Stop the other process or change PORT in server/.env.`);
+  } else {
+    console.error('Server listen error:', err.message || err);
+  }
   process.exit(1);
-});
+}
+server.on('error', onListenError);
+wss.on('error', onListenError);
 
 boot();
