@@ -19,7 +19,6 @@ COPY server/public ./public
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
 ENV PORT=4000
-ENV TEAMTASK_SQLITE=1
 ENV TEAMTASK_WEB_DIST=/app/web
 ENV TEAMTASK_DATA_DIR=/app/data
 ENV TEAMTASK_UPLOADS_DIR=/app/data/uploads

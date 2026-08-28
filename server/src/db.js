@@ -86,6 +86,8 @@ function getD1Config() {
  * TEAMTASK_SQLITE=/abs/or/rel/path.db → that file
  */
 function getSqlitePath() {
+  // If Cloudflare D1 is configured, ignore TEAMTASK_SQLITE so D1 takes precedence
+  if (getD1Config()) return '';
   const raw = (process.env.TEAMTASK_SQLITE || process.env.SQLITE_PATH || '').trim();
   if (!raw || raw === '0' || /^false$/i.test(raw)) return '';
   if (raw === '1' || /^true$/i.test(raw)) {
@@ -529,17 +531,7 @@ async function initFileStore() {
 async function initDb() {
   const d1Config = getD1Config();
   if (d1Config) {
-    try {
-      return await initD1(d1Config);
-    } catch (err) {
-      if (!allowFileFallback()) throw err;
-      console.warn(
-        'Cloudflare D1 unreachable:',
-        formatDbError(err),
-        '— falling back to local file DB. Set TEAMTASK_DB_FALLBACK=none to disable.'
-      );
-      return initFileStore();
-    }
+    return await initD1(d1Config);
   }
 
   const sqlitePath = getSqlitePath();
