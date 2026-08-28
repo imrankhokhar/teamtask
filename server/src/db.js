@@ -57,6 +57,7 @@ function getD1Config() {
   const accountId = (
     process.env.CLOUDFLARE_ACCOUNT_ID ||
     process.env.CF_ACCOUNT_ID ||
+    process.env.ACCOUNT_ID ||
     ''
   ).trim();
   const databaseId = (
@@ -64,6 +65,8 @@ function getD1Config() {
     process.env.CF_D1_DATABASE_ID ||
     process.env.CLOUDFLARE_D1_ID ||
     process.env.CF_D1_ID ||
+    process.env.D1_DATABASE_ID ||
+    process.env.D1_ID ||
     ''
   ).trim();
   const apiToken = (
@@ -71,6 +74,7 @@ function getD1Config() {
     process.env.CF_D1_API_TOKEN ||
     process.env.CLOUDFLARE_API_TOKEN ||
     process.env.CF_API_TOKEN ||
+    process.env.D1_API_TOKEN ||
     ''
   ).trim();
 
@@ -277,7 +281,14 @@ async function queryD1(sql, params = []) {
   });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`Cloudflare D1 HTTP ${res.status}: ${text}`);
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.errors && parsed.errors.length) {
+        detail = parsed.errors.map((e) => e.message || JSON.stringify(e)).join('; ');
+      }
+    } catch {}
+    throw new Error(`Cloudflare D1 HTTP ${res.status}: ${detail}`);
   }
   const body = await res.json();
   if (!body.success) {
@@ -531,7 +542,15 @@ async function initFileStore() {
 async function initDb() {
   const d1Config = getD1Config();
   if (d1Config) {
-    return await initD1(d1Config);
+    try {
+      return await initD1(d1Config);
+    } catch (err) {
+      console.error(
+        'Cloudflare D1 initialization failed:',
+        formatDbError(err)
+      );
+      throw err;
+    }
   }
 
   const sqlitePath = getSqlitePath();
