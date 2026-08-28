@@ -1,66 +1,82 @@
-# Cloudflare + SQLite (Docker)
+# Cloudflare D1 (Remote SQLite) Setup Guide
 
-TeamTask’s API is **Node/Express** (WebSockets, uploads, cron). It does **not** run on Cloudflare Workers / D1 as-is.
+TeamTask supports **Cloudflare D1** (Cloudflare's serverless SQLite database) as the remote data store.
 
-**Best setup:** Docker + SQLite volume, Cloudflare Tunnel (or DNS) in front.
+---
 
-```
-Internet → Cloudflare Tunnel → host:4000 → Docker (Node + SQLite)
-```
+## 1. Create a D1 Database in Cloudflare
 
-## Docker (recommended)
+1. Log in to your [Cloudflare Dashboard](https://dash.cloudflare.com/).
+2. On the left navigation, go to **Storage & Databases** → **D1 SQL Database** (or **Workers & Pages** → **D1**).
+3. Click **Create Database**.
+4. Choose **Dashboard** and enter a name (e.g. `teamtask-db`).
+5. Click **Create**.
 
-From the repo root (needs Docker Desktop):
+---
 
-```bat
-copy .env.docker.example .env
-REM edit .env — set JWT_SECRET and TEAMTASK_PUBLIC_URL
+## 2. Get Your Database ID & Account ID
 
-docker compose up -d --build
-```
+1. Click on your newly created `teamtask-db` database.
+2. In the top details area:
+   - Copy the **Database ID** (a UUID like `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`).
+3. Your **Account ID** is visible in your browser URL bar or on the right sidebar of the Cloudflare home page (a 32-character hex string).
 
-Open http://localhost:4000
+---
 
-Data lives in Docker volume `teamtask-data` (`/app/data` → SQLite + uploads).
+## 3. Create a Cloudflare API Token
 
-Useful commands:
+1. Click your **User Profile icon** (top right) → **My Profile** → **API Tokens** (or visit `https://dash.cloudflare.com/profile/api-tokens`).
+2. Click **Create Token**.
+3. Scroll to the bottom and click **Create Custom Token** → **Get started**.
+4. Configure the token:
+   - **Token name:** `TeamTask D1 Access`
+   - **Permissions:**
+     - `Account` — `D1` — `Edit`
+   - **Account Resources:**
+     - `Include` — `All accounts` (or select your specific account).
+5. Click **Continue to summary** → **Create Token**.
+6. **Copy the API token** secret immediately (you will not be able to see it again).
 
-```bat
-docker compose logs -f
-docker compose down
-docker compose up -d --build
-```
+---
 
-Backup (check volume name with `docker volume ls`):
+## 4. Set Environment Variables
 
-```bat
-docker run --rm -v teamtask_teamtask-data:/data -v %cd%:/backup alpine tar czf /backup/teamtask-data.tgz -C /data .
-```
-
-## Cloudflare Tunnel
-
-1. Domain on Cloudflare DNS  
-2. Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)  
-3. Route `https://your-domain.com` → `http://127.0.0.1:4000`  
-4. Keep `docker compose up -d` running  
-
-## Local without Docker
+### In Docker (`.env` next to `docker-compose.yml`):
 
 ```env
-TEAMTASK_SQLITE=1
-# DATABASE_URL=
+PORT=4000
+JWT_SECRET=your-secure-secret-key-12345
+TEAMTASK_PUBLIC_URL=https://tt.exodevs.com
+
+# Cloudflare D1 Settings
+CLOUDFLARE_ACCOUNT_ID=your_account_id_here
+CLOUDFLARE_D1_DATABASE_ID=your_database_id_uuid_here
+CLOUDFLARE_D1_API_TOKEN=your_api_token_here
 ```
 
-```bat
-cd server
-npm install
-npm start
+### Or in `server/.env` (if running with Node/PM2 directly):
+
+```env
+CLOUDFLARE_ACCOUNT_ID=your_account_id_here
+CLOUDFLARE_D1_DATABASE_ID=your_database_id_uuid_here
+CLOUDFLARE_D1_API_TOKEN=your_api_token_here
 ```
 
-## What not to expect
+---
 
-| Idea | Reality |
-|------|---------|
-| Workers + D1 | Full API rewrite |
-| SQLite on Workers | No durable disk |
-| Neon | Optional; not needed with `TEAMTASK_SQLITE=1` |
+## 5. Deploy & Verify
+
+Restart your server or Docker container:
+
+```bash
+docker compose up -d --build
+docker compose logs --tail 30
+```
+
+You will see:
+```text
+TeamTask data store: Cloudflare D1 (database: xxxxxxxx...)
+TeamTask API running on http://0.0.0.0:4000
+```
+
+The server automatically creates the `appstate` table in Cloudflare D1 and seeds default admin credentials if the database is empty.

@@ -18,7 +18,7 @@ const DB_PATH = path.join(DATA_DIR, 'db.json');
 /** @type {object|null} */
 let memoryDb = null;
 
-/** @type {'postgres'|'mongodb'|'sqlite'|'file'|null} */
+/** @type {'postgres'|'mongodb'|'sqlite'|'d1'|'file'|null} */
 let storeMode = null;
 
 /** @type {import('pg').Pool|null} */
@@ -50,6 +50,37 @@ function getMongoUri() {
 }
 
 /**
+ * Cloudflare D1 HTTP Configuration.
+ * Enabled when CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_D1_DATABASE_ID, and CLOUDFLARE_D1_API_TOKEN are set.
+ */
+function getD1Config() {
+  const accountId = (
+    process.env.CLOUDFLARE_ACCOUNT_ID ||
+    process.env.CF_ACCOUNT_ID ||
+    ''
+  ).trim();
+  const databaseId = (
+    process.env.CLOUDFLARE_D1_DATABASE_ID ||
+    process.env.CF_D1_DATABASE_ID ||
+    process.env.CLOUDFLARE_D1_ID ||
+    process.env.CF_D1_ID ||
+    ''
+  ).trim();
+  const apiToken = (
+    process.env.CLOUDFLARE_D1_API_TOKEN ||
+    process.env.CF_D1_API_TOKEN ||
+    process.env.CLOUDFLARE_API_TOKEN ||
+    process.env.CF_API_TOKEN ||
+    ''
+  ).trim();
+
+  if (accountId && databaseId && apiToken) {
+    return { accountId, databaseId, apiToken };
+  }
+  return null;
+}
+
+/**
  * SQLite path when enabled.
  * TEAMTASK_SQLITE=1 → ./data/teamtask.sqlite
  * TEAMTASK_SQLITE=/abs/or/rel/path.db → that file
@@ -64,7 +95,7 @@ function getSqlitePath() {
 }
 
 function isCloudDbConfigured() {
-  return Boolean(getPostgresUri() || getMongoUri() || getSqlitePath());
+  return Boolean(getD1Config() || getPostgresUri() || getMongoUri() || getSqlitePath());
 }
 
 function createSeededDb() {
@@ -229,6 +260,46 @@ async function flushMongo() {
   );
 }
 
+async function queryD1(sql, params = []) {
+  const config = getD1Config();
+  if (!config) throw new Error('Cloudflare D1 is not configured');
+  const { accountId, databaseId, apiToken } = config;
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ sql, params }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Cloudflare D1 HTTP ${res.status}: ${text}`);
+  }
+  const body = await res.json();
+  if (!body.success) {
+    const msg = (body.errors || []).map((e) => e.message || JSON.stringify(e)).join('; ');
+    throw new Error(`Cloudflare D1 error: ${msg || 'unknown error'}`);
+  }
+  const first = body.result?.[0];
+  return first?.results || [];
+}
+
+async function flushD1() {
+  if (storeMode !== 'd1' || !memoryDb || !remoteDirty) return;
+  remoteDirty = false;
+  const data = clone(memoryDb);
+  await queryD1(
+    `INSERT INTO appstate (id, data, updated_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(id) DO UPDATE SET
+       data = excluded.data,
+       updated_at = datetime('now')`,
+    [DOC_ID, JSON.stringify(data)]
+  );
+}
+
 function flushSqlite() {
   if (!sqliteDb || !memoryDb || !remoteDirty) return;
   remoteDirty = false;
@@ -247,9 +318,8 @@ function flushSqlite() {
 async function flushRemote() {
   if (storeMode === 'postgres') return flushPostgres();
   if (storeMode === 'mongodb') return flushMongo();
-  if (storeMode === 'sqlite') {
-    flushSqlite();
-  }
+  if (storeMode === 'sqlite') return flushSqlite();
+  if (storeMode === 'd1') return flushD1();
 }
 
 function scheduleRemoteFlush() {
@@ -346,6 +416,41 @@ function loadSeedOrJsonFile() {
   return createSeededDb();
 }
 
+async function initD1(config) {
+  // Ensure table exists in Cloudflare D1
+  await queryD1(`
+    CREATE TABLE IF NOT EXISTS appstate (
+      id TEXT PRIMARY KEY,
+      data TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
+  const rows = await queryD1('SELECT data FROM appstate WHERE id = ?', [DOC_ID]);
+  const row = rows[0];
+  if (row?.data) {
+    const parsed = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
+    if (parsed && Array.isArray(parsed.users) && parsed.users.length) {
+      memoryDb = parsed;
+    } else {
+      memoryDb = loadSeedOrJsonFile();
+      remoteDirty = true;
+      await flushD1();
+    }
+  } else {
+    memoryDb = loadSeedOrJsonFile();
+    remoteDirty = true;
+    await flushD1();
+  }
+  if (migrateDb(memoryDb)) {
+    remoteDirty = true;
+    await flushD1();
+  }
+  storeMode = 'd1';
+  console.log('TeamTask data store: Cloudflare D1 (database:', config.databaseId.slice(0, 8) + '...)');
+  return { mode: 'd1' };
+}
+
 async function initSqlite(dbPath) {
   const Database = require('better-sqlite3');
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
@@ -417,11 +522,26 @@ async function initFileStore() {
 
 /**
  * Call once before accepting traffic.
- * Priority: TEAMTASK_SQLITE → DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
+ * Priority: Cloudflare D1 → TEAMTASK_SQLITE → DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
  * In development, unreachable cloud DB falls back to local file unless
  * TEAMTASK_DB_FALLBACK=none.
  */
 async function initDb() {
+  const d1Config = getD1Config();
+  if (d1Config) {
+    try {
+      return await initD1(d1Config);
+    } catch (err) {
+      if (!allowFileFallback()) throw err;
+      console.warn(
+        'Cloudflare D1 unreachable:',
+        formatDbError(err),
+        '— falling back to local file DB. Set TEAMTASK_DB_FALLBACK=none to disable.'
+      );
+      return initFileStore();
+    }
+  }
+
   const sqlitePath = getSqlitePath();
   if (sqlitePath) return initSqlite(sqlitePath);
 
@@ -479,7 +599,7 @@ function readDb() {
 
 function writeDb(db) {
   memoryDb = db;
-  if (storeMode === 'postgres' || storeMode === 'mongodb' || storeMode === 'sqlite') {
+  if (storeMode === 'postgres' || storeMode === 'mongodb' || storeMode === 'sqlite' || storeMode === 'd1') {
     scheduleRemoteFlush();
     return;
   }
@@ -529,6 +649,7 @@ module.exports = {
   isCloudDbConfigured,
   getPostgresUri,
   getSqlitePath,
+  getD1Config,
   DB_PATH,
   DATA_DIR,
   createSeededDb,
