@@ -7,11 +7,19 @@
         return Promise.all(regs.map(function (r) { return r.update(); }));
       })
       .then(function () {
-        return navigator.serviceWorker.register('/sw.js?v=1788179127460', {
+        return navigator.serviceWorker.register('/sw.js?v=1788180435757', {
           scope: '/',
           updateViaCache: 'none',
         });
       })
       .catch(function () {});
+  });
+  // Auto-reload once when a new service worker takes over to ensure assets are fresh
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
   });
 })();

@@ -14,4 +14,12 @@
       })
       .catch(function () {});
   });
+  // Auto-reload once when a new service worker takes over to ensure assets are fresh
+  var refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+  });
 })();
