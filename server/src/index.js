@@ -1933,6 +1933,36 @@ if (webRoot) {
     }
   );
 
+  // Serve Expo web JS bundles with fallback for stale cached hashes
+  app.get('/_expo/static/js/web/:file', (req, res, next) => {
+    const file = path.basename(req.params.file || '');
+    const jsDir = path.join(webRoot, '_expo', 'static', 'js', 'web');
+    const abs = path.join(jsDir, file);
+    if (fs.existsSync(abs)) {
+      res.type('application/javascript');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      return res.sendFile(abs);
+    }
+    // Fallback: if browser/CDN cached an older index-*.js hash, serve the active bundle
+    if (fs.existsSync(jsDir)) {
+      const files = fs.readdirSync(jsDir).filter((f) => f.startsWith('index-') && f.endsWith('.js'));
+      if (files.length) {
+        const sorted = files.sort((a, b) => {
+          const sa = fs.statSync(path.join(jsDir, a)).mtimeMs;
+          const sb = fs.statSync(path.join(jsDir, b)).mtimeMs;
+          return sb - sa;
+        });
+        const fallbackAbs = path.join(jsDir, sorted[0]);
+        res.type('application/javascript');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        noStore(res);
+        return res.sendFile(fallbackAbs);
+      }
+    }
+    next();
+  });
+
   app.use(
     express.static(webRoot, {
       etag: false,
