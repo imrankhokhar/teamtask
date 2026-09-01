@@ -6,6 +6,13 @@ const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { v4: uuid } = require('uuid');
 const { createDefaultRoles } = require('./permissions');
+const {
+  createSqliteAdapter,
+  createD1Adapter,
+  createPgAdapter,
+  initRelationalStore,
+  saveToRelational,
+} = require('./db-relational');
 
 function resolveDataDir() {
   if (process.env.TEAMTASK_DATA_DIR) return process.env.TEAMTASK_DATA_DIR;
@@ -38,6 +45,9 @@ let mongoCol = null;
 let remoteDirty = false;
 let remoteFlushTimer = null;
 const DOC_ID = 'teamtask-main';
+
+/** @type {import('./db-relational').createSqliteAdapter|null} */
+let relationalAdapter = null;
 
 function getPostgresUri() {
   return (
@@ -249,16 +259,10 @@ function ensureFileDb() {
 }
 
 async function flushPostgres() {
-  if (!pgPool || !memoryDb || !remoteDirty) return;
+  if (!relationalAdapter || !memoryDb || !remoteDirty) return;
   remoteDirty = false;
   const data = clone(memoryDb);
-  await pgPool.query(
-    `INSERT INTO appstate (id, data, updated_at)
-     VALUES ($1, $2::jsonb, NOW())
-     ON CONFLICT (id) DO UPDATE
-     SET data = EXCLUDED.data, updated_at = NOW()`,
-    [DOC_ID, JSON.stringify(data)]
-  );
+  await saveToRelational(relationalAdapter, data);
 }
 
 async function flushMongo() {
@@ -306,32 +310,17 @@ async function queryD1(sql, params = []) {
 }
 
 async function flushD1() {
-  if (storeMode !== 'd1' || !memoryDb || !remoteDirty) return;
+  if (storeMode !== 'd1' || !relationalAdapter || !memoryDb || !remoteDirty) return;
   remoteDirty = false;
   const data = clone(memoryDb);
-  await queryD1(
-    `INSERT INTO appstate (id, data, updated_at)
-     VALUES (?, ?, datetime('now'))
-     ON CONFLICT(id) DO UPDATE SET
-       data = excluded.data,
-       updated_at = datetime('now')`,
-    [DOC_ID, JSON.stringify(data)]
-  );
+  await saveToRelational(relationalAdapter, data);
 }
 
-function flushSqlite() {
-  if (!sqliteDb || !memoryDb || !remoteDirty) return;
+async function flushSqlite() {
+  if (!relationalAdapter || !memoryDb || !remoteDirty) return;
   remoteDirty = false;
   const data = clone(memoryDb);
-  sqliteDb
-    .prepare(
-      `INSERT INTO appstate (id, data, updated_at)
-       VALUES (?, ?, datetime('now'))
-       ON CONFLICT(id) DO UPDATE SET
-         data = excluded.data,
-         updated_at = datetime('now')`
-    )
-    .run(DOC_ID, JSON.stringify(data));
+  await saveToRelational(relationalAdapter, data);
 }
 
 async function flushRemote() {
@@ -372,29 +361,14 @@ async function initPostgres(uri) {
         : undefined,
   });
 
-  await pgPool.query(`
-    CREATE TABLE IF NOT EXISTS appstate (
-      id TEXT PRIMARY KEY,
-      data JSONB NOT NULL,
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
-
-  const result = await pgPool.query('SELECT data FROM appstate WHERE id = $1', [DOC_ID]);
-  const row = result.rows[0];
-  if (row?.data && Array.isArray(row.data.users) && row.data.users.length) {
-    memoryDb = row.data;
-  } else {
-    memoryDb = createSeededDb();
-    remoteDirty = true;
-    await flushPostgres();
-  }
-  if (migrateDb(memoryDb)) {
-    remoteDirty = true;
-    await flushPostgres();
-  }
+  relationalAdapter = createPgAdapter(pgPool);
+  memoryDb = await initRelationalStore(relationalAdapter, {
+    docId: DOC_ID,
+    createSeededDb,
+    migrateDb,
+  });
   storeMode = 'postgres';
-  console.log('TeamTask data store: PostgreSQL (shared cloud via DATABASE_URL)');
+  console.log('TeamTask data store: PostgreSQL relational tables');
   return { mode: 'postgres' };
 }
 
@@ -436,37 +410,14 @@ function loadSeedOrJsonFile() {
 }
 
 async function initD1(config) {
-  // Ensure table exists in Cloudflare D1
-  await queryD1(`
-    CREATE TABLE IF NOT EXISTS appstate (
-      id TEXT PRIMARY KEY,
-      data TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  const rows = await queryD1('SELECT data FROM appstate WHERE id = ?', [DOC_ID]);
-  const row = rows[0];
-  if (row?.data) {
-    const parsed = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
-    if (parsed && Array.isArray(parsed.users) && parsed.users.length) {
-      memoryDb = parsed;
-    } else {
-      memoryDb = loadSeedOrJsonFile();
-      remoteDirty = true;
-      await flushD1();
-    }
-  } else {
-    memoryDb = loadSeedOrJsonFile();
-    remoteDirty = true;
-    await flushD1();
-  }
-  if (migrateDb(memoryDb)) {
-    remoteDirty = true;
-    await flushD1();
-  }
+  relationalAdapter = createD1Adapter(queryD1);
+  memoryDb = await initRelationalStore(relationalAdapter, {
+    docId: DOC_ID,
+    createSeededDb,
+    migrateDb,
+  });
   storeMode = 'd1';
-  console.log('TeamTask data store: Cloudflare D1 (database:', config.databaseId.slice(0, 8) + '...)');
+  console.log('TeamTask data store: Cloudflare D1 relational tables (database:', config.databaseId.slice(0, 8) + '...)');
   return { mode: 'd1' };
 }
 
@@ -475,35 +426,14 @@ async function initSqlite(dbPath) {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   sqliteDb = new Database(dbPath);
   sqliteDb.pragma('journal_mode = WAL');
-  sqliteDb.exec(`
-    CREATE TABLE IF NOT EXISTS appstate (
-      id TEXT PRIMARY KEY,
-      data TEXT NOT NULL,
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    )
-  `);
-
-  const row = sqliteDb.prepare('SELECT data FROM appstate WHERE id = ?').get(DOC_ID);
-  if (row?.data) {
-    const parsed = typeof row.data === 'string' ? JSON.parse(row.data) : row.data;
-    if (parsed && Array.isArray(parsed.users) && parsed.users.length) {
-      memoryDb = parsed;
-    } else {
-      memoryDb = loadSeedOrJsonFile();
-      remoteDirty = true;
-      flushSqlite();
-    }
-  } else {
-    memoryDb = loadSeedOrJsonFile();
-    remoteDirty = true;
-    flushSqlite();
-  }
-  if (migrateDb(memoryDb)) {
-    remoteDirty = true;
-    flushSqlite();
-  }
+  relationalAdapter = createSqliteAdapter(sqliteDb);
+  memoryDb = await initRelationalStore(relationalAdapter, {
+    docId: DOC_ID,
+    createSeededDb,
+    migrateDb,
+  });
   storeMode = 'sqlite';
-  console.log('TeamTask data store: SQLite', dbPath);
+  console.log('TeamTask data store: SQLite relational tables', dbPath);
   return { mode: 'sqlite' };
 }
 
@@ -654,6 +584,7 @@ async function closeDb() {
     }
     sqliteDb = null;
   }
+  relationalAdapter = null;
   storeMode = null;
 }
 
