@@ -538,14 +538,61 @@ async function saveToRelational(adapter, db) {
   await adapter.batch(ops);
 }
 
+function mergeLegacyIntoRelational(current, legacy) {
+  if (!legacy) return { db: current, repaired: false };
+  const out = { ...current };
+  let repaired = false;
+
+  if (!(out.tasks || []).length && (legacy.tasks || []).length) {
+    out.tasks = legacy.tasks;
+    out.taskAssignees = legacy.taskAssignees || [];
+    out.taskTeamAssignees = legacy.taskTeamAssignees || [];
+    repaired = true;
+  }
+  if (!(out.checklistItems || []).length && (legacy.checklistItems || []).length) {
+    out.checklistItems = legacy.checklistItems;
+    out.checklistReplies = legacy.checklistReplies || [];
+    repaired = true;
+  }
+  if (!(out.teams || []).length && (legacy.teams || []).length) {
+    out.teams = legacy.teams;
+    out.teamMembers = legacy.teamMembers || [];
+    repaired = true;
+  }
+  if (!(out.notifications || []).length && (legacy.notifications || []).length) {
+    out.notifications = legacy.notifications;
+    repaired = true;
+  }
+  if (!(out.roles || []).length && (legacy.roles || []).length) {
+    out.roles = legacy.roles;
+    repaired = true;
+  }
+  const curSettings = out.settings || {};
+  const legSettings = legacy.settings || {};
+  if (Object.keys(legSettings).length > Object.keys(curSettings).length) {
+    out.settings = { ...curSettings, ...legSettings };
+    repaired = true;
+  }
+
+  return { db: out, repaired };
+}
+
 async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }) {
   await ensureSchema(adapter);
 
   let memoryDb;
+  let repaired = false;
   const userCount = await countUsers(adapter);
 
   if (userCount > 0) {
     memoryDb = await loadFromRelational(adapter);
+    const legacy = await loadLegacyBlob(adapter, docId);
+    const merged = mergeLegacyIntoRelational(memoryDb, legacy);
+    if (merged.repaired) {
+      memoryDb = merged.db;
+      repaired = true;
+      console.log('TeamTask: repaired relational tables from legacy appstate blob');
+    }
   } else {
     const legacy = await loadLegacyBlob(adapter, docId);
     if (legacy) {
@@ -558,6 +605,10 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
   }
 
   if (migrateDb(memoryDb)) {
+    repaired = true;
+  }
+
+  if (repaired) {
     await saveToRelational(adapter, memoryDb);
   }
 
