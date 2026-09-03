@@ -397,260 +397,303 @@ async function loadFromRelational(adapter) {
   };
 }
 
-function buildClearOps() {
-  // Child tables first, then parents
-  const tables = [
-    'checklist_replies',
-    'checklist_items',
-    'notifications',
-    'task_reminders',
-    'task_assignees',
-    'task_team_assignees',
-    'tasks',
-    'team_members',
-    'teams',
-    'users',
-    'roles',
-    'app_settings',
-  ];
-  return tables.map((t) => ({ sql: `DELETE FROM ${t}`, params: [] }));
-}
+/** @type {object|null} last successfully persisted in-memory snapshot */
+let lastPersistedDb = null;
 
-/** @type {Record<string, string>} */
-let lastSaveHashes = {};
-
-function stableHash(value) {
+function cloneJson(value) {
   return JSON.stringify(value);
 }
 
-function tablePayloads(db) {
+function normalizeDb(db) {
   return {
     roles: uniqByKey(db.roles, (x) => x.id),
     users: uniqByKey(db.users, (x) => x.id),
     teams: uniqByKey(db.teams, (x) => x.id),
-    team_members: uniqByKey(db.teamMembers, (x) => `${x.teamId}|${x.userId}`),
+    teamMembers: uniqByKey(db.teamMembers, (x) => `${x.teamId}|${x.userId}`),
     tasks: uniqByKey(db.tasks, (x) => x.id).map((t) => ({
       ...t,
-      reminders: uniqByKey(t.reminders || [], (x) => x.id || `${t.id}|${x.at}`),
+      reminders: uniqByKey(t.reminders || [], (x) => x.id || `${t.id}|${x.at}`).map((r) => ({
+        id: r.id || uuid(),
+        at: r.at,
+        notified: Boolean(r.notified),
+      })),
     })),
-    task_assignees: uniqByKey(db.taskAssignees, (x) => `${x.taskId}|${x.userId}`),
-    task_team_assignees: uniqByKey(db.taskTeamAssignees, (x) => `${x.taskId}|${x.teamId}`),
-    checklist_items: uniqByKey(db.checklistItems, (x) => x.id),
-    checklist_replies: uniqByKey(db.checklistReplies, (x) => x.id),
+    taskAssignees: uniqByKey(db.taskAssignees, (x) => `${x.taskId}|${x.userId}`),
+    taskTeamAssignees: uniqByKey(db.taskTeamAssignees, (x) => `${x.taskId}|${x.teamId}`),
+    checklistItems: uniqByKey(db.checklistItems, (x) => x.id),
+    checklistReplies: uniqByKey(db.checklistReplies, (x) => x.id),
     notifications: uniqByKey(db.notifications, (x) => x.id),
-    app_settings: settingsToRows(db.settings),
+    settings: db.settings || {},
   };
 }
 
-function buildInsertOpsForTables(payloads, dirty) {
+function diffByKey(prevList, nextList, keyFn) {
+  const prevMap = new Map((prevList || []).map((row) => [keyFn(row), row]));
+  const nextMap = new Map((nextList || []).map((row) => [keyFn(row), row]));
+  const upserts = [];
+  const deletes = [];
+  for (const [key, row] of nextMap) {
+    const old = prevMap.get(key);
+    if (!old || cloneJson(old) !== cloneJson(row)) upserts.push(row);
+  }
+  for (const [key] of prevMap) {
+    if (!nextMap.has(key)) deletes.push(key);
+  }
+  return { upserts, deletes };
+}
+
+function roleInsert(r) {
+  return {
+    sql: 'INSERT OR REPLACE INTO roles (id, name, permissions) VALUES (?, ?, ?)',
+    params: [r.id, r.name, JSON.stringify(r.permissions || [])],
+  };
+}
+
+function userInsert(u) {
+  return {
+    sql: `INSERT OR REPLACE INTO users (
+      id, first_name, last_name, name, email, password_hash, role, role_id,
+      push_token, avatar_url, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      u.id,
+      u.firstName || '',
+      u.lastName || '',
+      u.name,
+      u.email,
+      u.passwordHash,
+      u.role || 'user',
+      u.roleId || null,
+      u.pushToken || null,
+      u.avatarUrl || null,
+      u.createdAt,
+    ],
+  };
+}
+
+function teamInsert(t) {
+  return {
+    sql: 'INSERT OR REPLACE INTO teams (id, name, created_by, created_at) VALUES (?, ?, ?, ?)',
+    params: [t.id, t.name, t.createdBy || null, t.createdAt],
+  };
+}
+
+function taskInsert(t) {
+  return {
+    sql: `INSERT OR REPLACE INTO tasks (
+      id, title, description, status, reporter_id, reminder_at, reminder_notified,
+      created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      t.id,
+      t.title,
+      t.description || '',
+      t.status,
+      t.reporterId || null,
+      t.reminderAt || null,
+      bool(t.reminderNotified),
+      t.createdAt,
+      t.updatedAt,
+    ],
+  };
+}
+
+function checklistInsert(c) {
+  return {
+    sql: `INSERT OR REPLACE INTO checklist_items (
+      id, task_id, text, is_checked, checked_by, checked_at, uncheck_reason, sort_order
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      c.id,
+      c.taskId,
+      c.text,
+      bool(c.isChecked),
+      c.checkedBy || null,
+      c.checkedAt || null,
+      c.uncheckReason || null,
+      c.sortOrder || 0,
+    ],
+  };
+}
+
+function notificationInsert(n) {
+  return {
+    sql: 'INSERT OR REPLACE INTO notifications (id, user_id, task_id, type, title, body, read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    params: [
+      n.id,
+      n.userId,
+      n.taskId || null,
+      n.type || null,
+      n.title || '',
+      n.body || '',
+      bool(n.read),
+      n.createdAt,
+    ],
+  };
+}
+
+/** Build SQL ops that touch only changed rows (never rewrite whole tables). */
+function buildIncrementalOps(prevDb, nextDb) {
+  const prev = normalizeDb(prevDb || {});
+  const next = normalizeDb(nextDb || {});
   const ops = [];
-  const has = (name) => dirty.has(name);
 
-  if (has('roles')) {
-    for (const r of payloads.roles) {
+  // Deletes first for child-ish rows, then upserts
+  const roles = diffByKey(prev.roles, next.roles, (x) => x.id);
+  for (const id of roles.deletes) ops.push({ sql: 'DELETE FROM roles WHERE id = ?', params: [id] });
+  for (const r of roles.upserts) ops.push(roleInsert(r));
+
+  const users = diffByKey(prev.users, next.users, (x) => x.id);
+  for (const id of users.deletes) ops.push({ sql: 'DELETE FROM users WHERE id = ?', params: [id] });
+  for (const u of users.upserts) ops.push(userInsert(u));
+
+  const teams = diffByKey(prev.teams, next.teams, (x) => x.id);
+  for (const id of teams.deletes) {
+    ops.push({ sql: 'DELETE FROM team_members WHERE team_id = ?', params: [id] });
+    ops.push({ sql: 'DELETE FROM teams WHERE id = ?', params: [id] });
+  }
+  for (const t of teams.upserts) ops.push(teamInsert(t));
+
+  const teamMembers = diffByKey(prev.teamMembers, next.teamMembers, (x) => `${x.teamId}|${x.userId}`);
+  for (const key of teamMembers.deletes) {
+    const [teamId, userId] = key.split('|');
+    ops.push({ sql: 'DELETE FROM team_members WHERE team_id = ? AND user_id = ?', params: [teamId, userId] });
+  }
+  for (const m of teamMembers.upserts) {
+    ops.push({
+      sql: 'INSERT OR REPLACE INTO team_members (team_id, user_id) VALUES (?, ?)',
+      params: [m.teamId, m.userId],
+    });
+  }
+
+  const tasks = diffByKey(prev.tasks, next.tasks, (x) => x.id);
+  for (const id of tasks.deletes) {
+    ops.push({ sql: 'DELETE FROM task_reminders WHERE task_id = ?', params: [id] });
+    ops.push({ sql: 'DELETE FROM task_assignees WHERE task_id = ?', params: [id] });
+    ops.push({ sql: 'DELETE FROM task_team_assignees WHERE task_id = ?', params: [id] });
+    ops.push({ sql: 'DELETE FROM tasks WHERE id = ?', params: [id] });
+  }
+  for (const t of tasks.upserts) {
+    ops.push(taskInsert(t));
+    // Sync reminders for this task only
+    ops.push({ sql: 'DELETE FROM task_reminders WHERE task_id = ?', params: [t.id] });
+    for (const rem of t.reminders || []) {
       ops.push({
-        sql: 'INSERT OR REPLACE INTO roles (id, name, permissions) VALUES (?, ?, ?)',
-        params: [r.id, r.name, JSON.stringify(r.permissions || [])],
+        sql: 'INSERT OR REPLACE INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
+        params: [rem.id || uuid(), t.id, rem.at, bool(rem.notified)],
       });
     }
   }
 
-  if (has('users')) {
-    for (const u of payloads.users) {
-      ops.push({
-        sql: `INSERT OR REPLACE INTO users (
-          id, first_name, last_name, name, email, password_hash, role, role_id,
-          push_token, avatar_url, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          u.id,
-          u.firstName || '',
-          u.lastName || '',
-          u.name,
-          u.email,
-          u.passwordHash,
-          u.role || 'user',
-          u.roleId || null,
-          u.pushToken || null,
-          u.avatarUrl || null,
-          u.createdAt,
-        ],
-      });
-    }
+  const assignees = diffByKey(prev.taskAssignees, next.taskAssignees, (x) => `${x.taskId}|${x.userId}`);
+  for (const key of assignees.deletes) {
+    const [taskId, userId] = key.split('|');
+    ops.push({ sql: 'DELETE FROM task_assignees WHERE task_id = ? AND user_id = ?', params: [taskId, userId] });
+  }
+  for (const a of assignees.upserts) {
+    ops.push({
+      sql: 'INSERT OR REPLACE INTO task_assignees (task_id, user_id) VALUES (?, ?)',
+      params: [a.taskId, a.userId],
+    });
   }
 
-  if (has('teams')) {
-    for (const t of payloads.teams) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO teams (id, name, created_by, created_at) VALUES (?, ?, ?, ?)',
-        params: [t.id, t.name, t.createdBy || null, t.createdAt],
-      });
-    }
+  const teamAssign = diffByKey(
+    prev.taskTeamAssignees,
+    next.taskTeamAssignees,
+    (x) => `${x.taskId}|${x.teamId}`
+  );
+  for (const key of teamAssign.deletes) {
+    const [taskId, teamId] = key.split('|');
+    ops.push({
+      sql: 'DELETE FROM task_team_assignees WHERE task_id = ? AND team_id = ?',
+      params: [taskId, teamId],
+    });
+  }
+  for (const a of teamAssign.upserts) {
+    ops.push({
+      sql: 'INSERT OR REPLACE INTO task_team_assignees (task_id, team_id) VALUES (?, ?)',
+      params: [a.taskId, a.teamId],
+    });
   }
 
-  if (has('team_members')) {
-    for (const m of payloads.team_members) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO team_members (team_id, user_id) VALUES (?, ?)',
-        params: [m.teamId, m.userId],
-      });
-    }
+  const checks = diffByKey(prev.checklistItems, next.checklistItems, (x) => x.id);
+  for (const id of checks.deletes) {
+    ops.push({ sql: 'DELETE FROM checklist_replies WHERE checklist_item_id = ?', params: [id] });
+    ops.push({ sql: 'DELETE FROM checklist_items WHERE id = ?', params: [id] });
+  }
+  for (const c of checks.upserts) ops.push(checklistInsert(c));
+
+  const replies = diffByKey(prev.checklistReplies, next.checklistReplies, (x) => x.id);
+  for (const id of replies.deletes) {
+    ops.push({ sql: 'DELETE FROM checklist_replies WHERE id = ?', params: [id] });
+  }
+  for (const r of replies.upserts) {
+    ops.push({
+      sql: 'INSERT OR REPLACE INTO checklist_replies (id, checklist_item_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
+      params: [r.id, r.checklistItemId, r.userId, r.message, r.createdAt],
+    });
   }
 
-  if (has('tasks')) {
-    for (const t of payloads.tasks) {
-      ops.push({
-        sql: `INSERT OR REPLACE INTO tasks (
-          id, title, description, status, reporter_id, reminder_at, reminder_notified,
-          created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          t.id,
-          t.title,
-          t.description || '',
-          t.status,
-          t.reporterId || null,
-          t.reminderAt || null,
-          bool(t.reminderNotified),
-          t.createdAt,
-          t.updatedAt,
-        ],
-      });
-      for (const rem of t.reminders || []) {
-        ops.push({
-          sql: 'INSERT OR REPLACE INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
-          params: [rem.id || uuid(), t.id, rem.at, bool(rem.notified)],
-        });
-      }
-    }
+  const notes = diffByKey(prev.notifications, next.notifications, (x) => x.id);
+  for (const id of notes.deletes) {
+    ops.push({ sql: 'DELETE FROM notifications WHERE id = ?', params: [id] });
   }
+  for (const n of notes.upserts) ops.push(notificationInsert(n));
 
-  if (has('task_assignees')) {
-    for (const aRow of payloads.task_assignees) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO task_assignees (task_id, user_id) VALUES (?, ?)',
-        params: [aRow.taskId, aRow.userId],
-      });
-    }
+  const prevSettings = settingsToRows(prev.settings);
+  const nextSettings = settingsToRows(next.settings);
+  const settingsDiff = diffByKey(prevSettings, nextSettings, (x) => x.key);
+  for (const key of settingsDiff.deletes) {
+    ops.push({ sql: 'DELETE FROM app_settings WHERE key = ?', params: [key] });
   }
-
-  if (has('task_team_assignees')) {
-    for (const aRow of payloads.task_team_assignees) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO task_team_assignees (task_id, team_id) VALUES (?, ?)',
-        params: [aRow.taskId, aRow.teamId],
-      });
-    }
-  }
-
-  if (has('checklist_items')) {
-    for (const c of payloads.checklist_items) {
-      ops.push({
-        sql: `INSERT OR REPLACE INTO checklist_items (
-          id, task_id, text, is_checked, checked_by, checked_at, uncheck_reason, sort_order
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [
-          c.id,
-          c.taskId,
-          c.text,
-          bool(c.isChecked),
-          c.checkedBy || null,
-          c.checkedAt || null,
-          c.uncheckReason || null,
-          c.sortOrder || 0,
-        ],
-      });
-    }
-  }
-
-  if (has('checklist_replies')) {
-    for (const r of payloads.checklist_replies) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO checklist_replies (id, checklist_item_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
-        params: [r.id, r.checklistItemId, r.userId, r.message, r.createdAt],
-      });
-    }
-  }
-
-  if (has('notifications')) {
-    for (const n of payloads.notifications) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO notifications (id, user_id, task_id, type, title, body, read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        params: [
-          n.id,
-          n.userId,
-          n.taskId || null,
-          n.type || null,
-          n.title || '',
-          n.body || '',
-          bool(n.read),
-          n.createdAt,
-        ],
-      });
-    }
-  }
-
-  if (has('app_settings')) {
-    for (const s of payloads.app_settings) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
-        params: [s.key, s.value],
-      });
-    }
+  for (const s of settingsDiff.upserts) {
+    ops.push({
+      sql: 'INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
+      params: [s.key, s.value],
+    });
   }
 
   return ops;
 }
 
-function clearOpsForDirty(dirty) {
-  const order = [
-    'checklist_replies',
-    'checklist_items',
-    'notifications',
-    'task_reminders',
-    'task_assignees',
-    'task_team_assignees',
-    'tasks',
-    'team_members',
-    'teams',
-    'users',
-    'roles',
-    'app_settings',
+function buildFullReplaceOps(db) {
+  const next = normalizeDb(db);
+  const empty = normalizeDb({});
+  // Diff against empty = insert every row once (migration / force)
+  return [
+    ...[
+      'checklist_replies',
+      'checklist_items',
+      'notifications',
+      'task_reminders',
+      'task_assignees',
+      'task_team_assignees',
+      'tasks',
+      'team_members',
+      'teams',
+      'users',
+      'roles',
+      'app_settings',
+    ].map((t) => ({ sql: `DELETE FROM ${t}`, params: [] })),
+    ...buildIncrementalOps(empty, next),
   ];
-  const ops = [];
-  for (const t of order) {
-    if (!dirty.has(t)) continue;
-    // tasks reminders live with tasks unit
-    if (t === 'task_reminders') continue;
-    ops.push({ sql: `DELETE FROM ${t}`, params: [] });
-    if (t === 'tasks') {
-      ops.push({ sql: 'DELETE FROM task_reminders', params: [] });
-    }
-  }
-  return ops;
 }
 
 async function saveToRelational(adapter, db, { force = false } = {}) {
-  const payloads = tablePayloads(db);
-  const dirty = new Set();
-  for (const [name, data] of Object.entries(payloads)) {
-    const hash = stableHash(data);
-    if (force || lastSaveHashes[name] !== hash) {
-      dirty.add(name);
-      // reminders are stored with tasks
-      if (name === 'tasks') dirty.add('task_reminders');
-    }
+  const next = JSON.parse(JSON.stringify(normalizeDb(db)));
+  let ops;
+  if (force || !lastPersistedDb) {
+    ops = buildFullReplaceOps(next);
+  } else {
+    ops = buildIncrementalOps(lastPersistedDb, next);
   }
-  if (!dirty.size) return;
-
-  await adapter.batch(clearOpsForDirty(dirty));
-  await adapter.batch(buildInsertOpsForTables(payloads, dirty));
-
-  for (const name of Object.keys(payloads)) {
-    if (dirty.has(name) || (name === 'tasks' && dirty.has('task_reminders'))) {
-      lastSaveHashes[name] = stableHash(payloads[name]);
-    }
+  if (!ops.length) {
+    lastPersistedDb = next;
+    return { wrote: 0 };
   }
+  await adapter.batch(ops);
+  lastPersistedDb = next;
+  return { wrote: ops.length };
 }
 
 function mergeLegacyIntoRelational(current, legacy) {
@@ -704,7 +747,7 @@ async function countTable(adapter, table) {
 
 async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }) {
   await ensureSchema(adapter);
-  lastSaveHashes = {};
+  lastPersistedDb = null;
 
   let memoryDb;
   let needSave = false;
@@ -736,13 +779,10 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
   }
 
   if (needSave) {
-    await saveToRelational(adapter, memoryDb, { force: true });
+    const result = await saveToRelational(adapter, memoryDb, { force: true });
+    console.log('TeamTask: relational save wrote', result.wrote, 'SQL statements');
   } else {
-    // Mark current state as already persisted so first flush after boot is cheap
-    const payloads = tablePayloads(memoryDb);
-    for (const [name, data] of Object.entries(payloads)) {
-      lastSaveHashes[name] = stableHash(data);
-    }
+    lastPersistedDb = JSON.parse(JSON.stringify(normalizeDb(memoryDb)));
   }
 
   return memoryDb;
