@@ -3,6 +3,8 @@
  * Used by SQLite, Cloudflare D1, and PostgreSQL backends.
  */
 
+const { v4: uuid } = require('uuid');
+
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS roles (
     id TEXT PRIMARY KEY,
@@ -228,11 +230,25 @@ function createD1Adapter(queryD1) {
       await queryD1(sql, params);
     },
     async batch(ops) {
+      // Sequential: D1 HTTP has no multi-statement transaction across calls.
       for (const op of ops) {
         await queryD1(op.sql, op.params);
       }
     },
   };
+}
+
+function uniqByKey(rows, keyFn) {
+  const seen = new Set();
+  const out = [];
+  for (const row of rows || []) {
+    if (!row) continue;
+    const key = keyFn(row);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
 }
 
 function createPgAdapter(pgPool) {
@@ -256,7 +272,9 @@ function createPgAdapter(pgPool) {
       try {
         await client.query('BEGIN');
         for (const op of ops) {
-          await client.query(pgSql(op.sql), op.params);
+          // SQLite/D1 use INSERT OR REPLACE; Postgres uses plain INSERT after DELETE
+          const raw = String(op.sql || '').replace(/^INSERT OR REPLACE/i, 'INSERT');
+          await client.query(pgSql(raw), op.params);
         }
         await client.query('COMMIT');
       } catch (err) {
@@ -379,8 +397,8 @@ async function loadFromRelational(adapter) {
   };
 }
 
-function buildSaveOps(db) {
-  const ops = [];
+function buildClearOps() {
+  // Child tables first, then parents
   const tables = [
     'checklist_replies',
     'checklist_items',
@@ -395,20 +413,22 @@ function buildSaveOps(db) {
     'roles',
     'app_settings',
   ];
-  for (const t of tables) {
-    ops.push({ sql: `DELETE FROM ${t}`, params: [] });
-  }
+  return tables.map((t) => ({ sql: `DELETE FROM ${t}`, params: [] }));
+}
 
-  for (const r of db.roles || []) {
+function buildInsertOps(db) {
+  const ops = [];
+
+  for (const r of uniqByKey(db.roles, (x) => x.id)) {
     ops.push({
-      sql: 'INSERT INTO roles (id, name, permissions) VALUES (?, ?, ?)',
+      sql: 'INSERT OR REPLACE INTO roles (id, name, permissions) VALUES (?, ?, ?)',
       params: [r.id, r.name, JSON.stringify(r.permissions || [])],
     });
   }
 
-  for (const u of db.users || []) {
+  for (const u of uniqByKey(db.users, (x) => x.id)) {
     ops.push({
-      sql: `INSERT INTO users (
+      sql: `INSERT OR REPLACE INTO users (
         id, first_name, last_name, name, email, password_hash, role, role_id,
         push_token, avatar_url, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -428,23 +448,23 @@ function buildSaveOps(db) {
     });
   }
 
-  for (const t of db.teams || []) {
+  for (const t of uniqByKey(db.teams, (x) => x.id)) {
     ops.push({
-      sql: 'INSERT INTO teams (id, name, created_by, created_at) VALUES (?, ?, ?, ?)',
+      sql: 'INSERT OR REPLACE INTO teams (id, name, created_by, created_at) VALUES (?, ?, ?, ?)',
       params: [t.id, t.name, t.createdBy || null, t.createdAt],
     });
   }
 
-  for (const m of db.teamMembers || []) {
+  for (const m of uniqByKey(db.teamMembers, (x) => `${x.teamId}|${x.userId}`)) {
     ops.push({
-      sql: 'INSERT INTO team_members (team_id, user_id) VALUES (?, ?)',
+      sql: 'INSERT OR REPLACE INTO team_members (team_id, user_id) VALUES (?, ?)',
       params: [m.teamId, m.userId],
     });
   }
 
-  for (const t of db.tasks || []) {
+  for (const t of uniqByKey(db.tasks, (x) => x.id)) {
     ops.push({
-      sql: `INSERT INTO tasks (
+      sql: `INSERT OR REPLACE INTO tasks (
         id, title, description, status, reporter_id, reminder_at, reminder_notified,
         created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -460,31 +480,31 @@ function buildSaveOps(db) {
         t.updatedAt,
       ],
     });
-    for (const rem of t.reminders || []) {
+    for (const rem of uniqByKey(t.reminders || [], (x) => x.id || `${t.id}|${x.at}`)) {
       ops.push({
-        sql: 'INSERT INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
-        params: [rem.id, t.id, rem.at, bool(rem.notified)],
+        sql: 'INSERT OR REPLACE INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
+        params: [rem.id || uuid(), t.id, rem.at, bool(rem.notified)],
       });
     }
   }
 
-  for (const aRow of db.taskAssignees || []) {
+  for (const aRow of uniqByKey(db.taskAssignees, (x) => `${x.taskId}|${x.userId}`)) {
     ops.push({
-      sql: 'INSERT INTO task_assignees (task_id, user_id) VALUES (?, ?)',
+      sql: 'INSERT OR REPLACE INTO task_assignees (task_id, user_id) VALUES (?, ?)',
       params: [aRow.taskId, aRow.userId],
     });
   }
 
-  for (const aRow of db.taskTeamAssignees || []) {
+  for (const aRow of uniqByKey(db.taskTeamAssignees, (x) => `${x.taskId}|${x.teamId}`)) {
     ops.push({
-      sql: 'INSERT INTO task_team_assignees (task_id, team_id) VALUES (?, ?)',
+      sql: 'INSERT OR REPLACE INTO task_team_assignees (task_id, team_id) VALUES (?, ?)',
       params: [aRow.taskId, aRow.teamId],
     });
   }
 
-  for (const c of db.checklistItems || []) {
+  for (const c of uniqByKey(db.checklistItems, (x) => x.id)) {
     ops.push({
-      sql: `INSERT INTO checklist_items (
+      sql: `INSERT OR REPLACE INTO checklist_items (
         id, task_id, text, is_checked, checked_by, checked_at, uncheck_reason, sort_order
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [
@@ -500,16 +520,16 @@ function buildSaveOps(db) {
     });
   }
 
-  for (const r of db.checklistReplies || []) {
+  for (const r of uniqByKey(db.checklistReplies, (x) => x.id)) {
     ops.push({
-      sql: 'INSERT INTO checklist_replies (id, checklist_item_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
+      sql: 'INSERT OR REPLACE INTO checklist_replies (id, checklist_item_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
       params: [r.id, r.checklistItemId, r.userId, r.message, r.createdAt],
     });
   }
 
-  for (const n of db.notifications || []) {
+  for (const n of uniqByKey(db.notifications, (x) => x.id)) {
     ops.push({
-      sql: 'INSERT INTO notifications (id, user_id, task_id, type, title, body, read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      sql: 'INSERT OR REPLACE INTO notifications (id, user_id, task_id, type, title, body, read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       params: [
         n.id,
         n.userId,
@@ -525,7 +545,7 @@ function buildSaveOps(db) {
 
   for (const s of settingsToRows(db.settings)) {
     ops.push({
-      sql: 'INSERT INTO app_settings (key, value) VALUES (?, ?)',
+      sql: 'INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
       params: [s.key, s.value],
     });
   }
@@ -534,8 +554,9 @@ function buildSaveOps(db) {
 }
 
 async function saveToRelational(adapter, db) {
-  const ops = buildSaveOps(db);
-  await adapter.batch(ops);
+  // Clear first (awaited), then upsert — avoids UNIQUE errors on partial/retry migrations
+  await adapter.batch(buildClearOps());
+  await adapter.batch(buildInsertOps(db));
 }
 
 function mergeLegacyIntoRelational(current, legacy) {
@@ -577,38 +598,50 @@ function mergeLegacyIntoRelational(current, legacy) {
   return { db: out, repaired };
 }
 
+async function countTable(adapter, table) {
+  try {
+    const rows = await adapter.query(`SELECT COUNT(*) AS c FROM ${table}`);
+    const row = rows[0] || {};
+    return Number(row.c || row.count || 0);
+  } catch {
+    return 0;
+  }
+}
+
 async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }) {
   await ensureSchema(adapter);
 
   let memoryDb;
-  let repaired = false;
+  let needSave = false;
   const userCount = await countUsers(adapter);
+  const taskCount = await countTable(adapter, 'tasks');
+  const legacy = await loadLegacyBlob(adapter, docId);
 
   if (userCount > 0) {
     memoryDb = await loadFromRelational(adapter);
-    const legacy = await loadLegacyBlob(adapter, docId);
     const merged = mergeLegacyIntoRelational(memoryDb, legacy);
     if (merged.repaired) {
       memoryDb = merged.db;
-      repaired = true;
+      needSave = true;
       console.log('TeamTask: repaired relational tables from legacy appstate blob');
     }
+  } else if (legacy) {
+    memoryDb = legacy;
+    needSave = true;
+    console.log('TeamTask: migrated data from legacy appstate blob to relational tables');
+  } else if (taskCount > 0) {
+    // Partial DB with no users — load whatever is there
+    memoryDb = await loadFromRelational(adapter);
   } else {
-    const legacy = await loadLegacyBlob(adapter, docId);
-    if (legacy) {
-      memoryDb = legacy;
-      console.log('TeamTask: migrated data from legacy appstate blob to relational tables');
-    } else {
-      memoryDb = createSeededDb();
-    }
-    await saveToRelational(adapter, memoryDb);
+    memoryDb = createSeededDb();
+    needSave = true;
   }
 
   if (migrateDb(memoryDb)) {
-    repaired = true;
+    needSave = true;
   }
 
-  if (repaired) {
+  if (needSave) {
     await saveToRelational(adapter, memoryDb);
   }
 
