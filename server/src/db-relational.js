@@ -416,147 +416,241 @@ function buildClearOps() {
   return tables.map((t) => ({ sql: `DELETE FROM ${t}`, params: [] }));
 }
 
-function buildInsertOps(db) {
+/** @type {Record<string, string>} */
+let lastSaveHashes = {};
+
+function stableHash(value) {
+  return JSON.stringify(value);
+}
+
+function tablePayloads(db) {
+  return {
+    roles: uniqByKey(db.roles, (x) => x.id),
+    users: uniqByKey(db.users, (x) => x.id),
+    teams: uniqByKey(db.teams, (x) => x.id),
+    team_members: uniqByKey(db.teamMembers, (x) => `${x.teamId}|${x.userId}`),
+    tasks: uniqByKey(db.tasks, (x) => x.id).map((t) => ({
+      ...t,
+      reminders: uniqByKey(t.reminders || [], (x) => x.id || `${t.id}|${x.at}`),
+    })),
+    task_assignees: uniqByKey(db.taskAssignees, (x) => `${x.taskId}|${x.userId}`),
+    task_team_assignees: uniqByKey(db.taskTeamAssignees, (x) => `${x.taskId}|${x.teamId}`),
+    checklist_items: uniqByKey(db.checklistItems, (x) => x.id),
+    checklist_replies: uniqByKey(db.checklistReplies, (x) => x.id),
+    notifications: uniqByKey(db.notifications, (x) => x.id),
+    app_settings: settingsToRows(db.settings),
+  };
+}
+
+function buildInsertOpsForTables(payloads, dirty) {
   const ops = [];
+  const has = (name) => dirty.has(name);
 
-  for (const r of uniqByKey(db.roles, (x) => x.id)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO roles (id, name, permissions) VALUES (?, ?, ?)',
-      params: [r.id, r.name, JSON.stringify(r.permissions || [])],
-    });
-  }
-
-  for (const u of uniqByKey(db.users, (x) => x.id)) {
-    ops.push({
-      sql: `INSERT OR REPLACE INTO users (
-        id, first_name, last_name, name, email, password_hash, role, role_id,
-        push_token, avatar_url, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [
-        u.id,
-        u.firstName || '',
-        u.lastName || '',
-        u.name,
-        u.email,
-        u.passwordHash,
-        u.role || 'user',
-        u.roleId || null,
-        u.pushToken || null,
-        u.avatarUrl || null,
-        u.createdAt,
-      ],
-    });
-  }
-
-  for (const t of uniqByKey(db.teams, (x) => x.id)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO teams (id, name, created_by, created_at) VALUES (?, ?, ?, ?)',
-      params: [t.id, t.name, t.createdBy || null, t.createdAt],
-    });
-  }
-
-  for (const m of uniqByKey(db.teamMembers, (x) => `${x.teamId}|${x.userId}`)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO team_members (team_id, user_id) VALUES (?, ?)',
-      params: [m.teamId, m.userId],
-    });
-  }
-
-  for (const t of uniqByKey(db.tasks, (x) => x.id)) {
-    ops.push({
-      sql: `INSERT OR REPLACE INTO tasks (
-        id, title, description, status, reporter_id, reminder_at, reminder_notified,
-        created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [
-        t.id,
-        t.title,
-        t.description || '',
-        t.status,
-        t.reporterId || null,
-        t.reminderAt || null,
-        bool(t.reminderNotified),
-        t.createdAt,
-        t.updatedAt,
-      ],
-    });
-    for (const rem of uniqByKey(t.reminders || [], (x) => x.id || `${t.id}|${x.at}`)) {
+  if (has('roles')) {
+    for (const r of payloads.roles) {
       ops.push({
-        sql: 'INSERT OR REPLACE INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
-        params: [rem.id || uuid(), t.id, rem.at, bool(rem.notified)],
+        sql: 'INSERT OR REPLACE INTO roles (id, name, permissions) VALUES (?, ?, ?)',
+        params: [r.id, r.name, JSON.stringify(r.permissions || [])],
       });
     }
   }
 
-  for (const aRow of uniqByKey(db.taskAssignees, (x) => `${x.taskId}|${x.userId}`)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO task_assignees (task_id, user_id) VALUES (?, ?)',
-      params: [aRow.taskId, aRow.userId],
-    });
+  if (has('users')) {
+    for (const u of payloads.users) {
+      ops.push({
+        sql: `INSERT OR REPLACE INTO users (
+          id, first_name, last_name, name, email, password_hash, role, role_id,
+          push_token, avatar_url, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          u.id,
+          u.firstName || '',
+          u.lastName || '',
+          u.name,
+          u.email,
+          u.passwordHash,
+          u.role || 'user',
+          u.roleId || null,
+          u.pushToken || null,
+          u.avatarUrl || null,
+          u.createdAt,
+        ],
+      });
+    }
   }
 
-  for (const aRow of uniqByKey(db.taskTeamAssignees, (x) => `${x.taskId}|${x.teamId}`)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO task_team_assignees (task_id, team_id) VALUES (?, ?)',
-      params: [aRow.taskId, aRow.teamId],
-    });
+  if (has('teams')) {
+    for (const t of payloads.teams) {
+      ops.push({
+        sql: 'INSERT OR REPLACE INTO teams (id, name, created_by, created_at) VALUES (?, ?, ?, ?)',
+        params: [t.id, t.name, t.createdBy || null, t.createdAt],
+      });
+    }
   }
 
-  for (const c of uniqByKey(db.checklistItems, (x) => x.id)) {
-    ops.push({
-      sql: `INSERT OR REPLACE INTO checklist_items (
-        id, task_id, text, is_checked, checked_by, checked_at, uncheck_reason, sort_order
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      params: [
-        c.id,
-        c.taskId,
-        c.text,
-        bool(c.isChecked),
-        c.checkedBy || null,
-        c.checkedAt || null,
-        c.uncheckReason || null,
-        c.sortOrder || 0,
-      ],
-    });
+  if (has('team_members')) {
+    for (const m of payloads.team_members) {
+      ops.push({
+        sql: 'INSERT OR REPLACE INTO team_members (team_id, user_id) VALUES (?, ?)',
+        params: [m.teamId, m.userId],
+      });
+    }
   }
 
-  for (const r of uniqByKey(db.checklistReplies, (x) => x.id)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO checklist_replies (id, checklist_item_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
-      params: [r.id, r.checklistItemId, r.userId, r.message, r.createdAt],
-    });
+  if (has('tasks')) {
+    for (const t of payloads.tasks) {
+      ops.push({
+        sql: `INSERT OR REPLACE INTO tasks (
+          id, title, description, status, reporter_id, reminder_at, reminder_notified,
+          created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          t.id,
+          t.title,
+          t.description || '',
+          t.status,
+          t.reporterId || null,
+          t.reminderAt || null,
+          bool(t.reminderNotified),
+          t.createdAt,
+          t.updatedAt,
+        ],
+      });
+      for (const rem of t.reminders || []) {
+        ops.push({
+          sql: 'INSERT OR REPLACE INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
+          params: [rem.id || uuid(), t.id, rem.at, bool(rem.notified)],
+        });
+      }
+    }
   }
 
-  for (const n of uniqByKey(db.notifications, (x) => x.id)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO notifications (id, user_id, task_id, type, title, body, read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      params: [
-        n.id,
-        n.userId,
-        n.taskId || null,
-        n.type || null,
-        n.title || '',
-        n.body || '',
-        bool(n.read),
-        n.createdAt,
-      ],
-    });
+  if (has('task_assignees')) {
+    for (const aRow of payloads.task_assignees) {
+      ops.push({
+        sql: 'INSERT OR REPLACE INTO task_assignees (task_id, user_id) VALUES (?, ?)',
+        params: [aRow.taskId, aRow.userId],
+      });
+    }
   }
 
-  for (const s of settingsToRows(db.settings)) {
-    ops.push({
-      sql: 'INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
-      params: [s.key, s.value],
-    });
+  if (has('task_team_assignees')) {
+    for (const aRow of payloads.task_team_assignees) {
+      ops.push({
+        sql: 'INSERT OR REPLACE INTO task_team_assignees (task_id, team_id) VALUES (?, ?)',
+        params: [aRow.taskId, aRow.teamId],
+      });
+    }
+  }
+
+  if (has('checklist_items')) {
+    for (const c of payloads.checklist_items) {
+      ops.push({
+        sql: `INSERT OR REPLACE INTO checklist_items (
+          id, task_id, text, is_checked, checked_by, checked_at, uncheck_reason, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [
+          c.id,
+          c.taskId,
+          c.text,
+          bool(c.isChecked),
+          c.checkedBy || null,
+          c.checkedAt || null,
+          c.uncheckReason || null,
+          c.sortOrder || 0,
+        ],
+      });
+    }
+  }
+
+  if (has('checklist_replies')) {
+    for (const r of payloads.checklist_replies) {
+      ops.push({
+        sql: 'INSERT OR REPLACE INTO checklist_replies (id, checklist_item_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?)',
+        params: [r.id, r.checklistItemId, r.userId, r.message, r.createdAt],
+      });
+    }
+  }
+
+  if (has('notifications')) {
+    for (const n of payloads.notifications) {
+      ops.push({
+        sql: 'INSERT OR REPLACE INTO notifications (id, user_id, task_id, type, title, body, read, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        params: [
+          n.id,
+          n.userId,
+          n.taskId || null,
+          n.type || null,
+          n.title || '',
+          n.body || '',
+          bool(n.read),
+          n.createdAt,
+        ],
+      });
+    }
+  }
+
+  if (has('app_settings')) {
+    for (const s of payloads.app_settings) {
+      ops.push({
+        sql: 'INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)',
+        params: [s.key, s.value],
+      });
+    }
   }
 
   return ops;
 }
 
-async function saveToRelational(adapter, db) {
-  // Clear first (awaited), then upsert — avoids UNIQUE errors on partial/retry migrations
-  await adapter.batch(buildClearOps());
-  await adapter.batch(buildInsertOps(db));
+function clearOpsForDirty(dirty) {
+  const order = [
+    'checklist_replies',
+    'checklist_items',
+    'notifications',
+    'task_reminders',
+    'task_assignees',
+    'task_team_assignees',
+    'tasks',
+    'team_members',
+    'teams',
+    'users',
+    'roles',
+    'app_settings',
+  ];
+  const ops = [];
+  for (const t of order) {
+    if (!dirty.has(t)) continue;
+    // tasks reminders live with tasks unit
+    if (t === 'task_reminders') continue;
+    ops.push({ sql: `DELETE FROM ${t}`, params: [] });
+    if (t === 'tasks') {
+      ops.push({ sql: 'DELETE FROM task_reminders', params: [] });
+    }
+  }
+  return ops;
+}
+
+async function saveToRelational(adapter, db, { force = false } = {}) {
+  const payloads = tablePayloads(db);
+  const dirty = new Set();
+  for (const [name, data] of Object.entries(payloads)) {
+    const hash = stableHash(data);
+    if (force || lastSaveHashes[name] !== hash) {
+      dirty.add(name);
+      // reminders are stored with tasks
+      if (name === 'tasks') dirty.add('task_reminders');
+    }
+  }
+  if (!dirty.size) return;
+
+  await adapter.batch(clearOpsForDirty(dirty));
+  await adapter.batch(buildInsertOpsForTables(payloads, dirty));
+
+  for (const name of Object.keys(payloads)) {
+    if (dirty.has(name) || (name === 'tasks' && dirty.has('task_reminders'))) {
+      lastSaveHashes[name] = stableHash(payloads[name]);
+    }
+  }
 }
 
 function mergeLegacyIntoRelational(current, legacy) {
@@ -610,6 +704,7 @@ async function countTable(adapter, table) {
 
 async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }) {
   await ensureSchema(adapter);
+  lastSaveHashes = {};
 
   let memoryDb;
   let needSave = false;
@@ -630,7 +725,6 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
     needSave = true;
     console.log('TeamTask: migrated data from legacy appstate blob to relational tables');
   } else if (taskCount > 0) {
-    // Partial DB with no users — load whatever is there
     memoryDb = await loadFromRelational(adapter);
   } else {
     memoryDb = createSeededDb();
@@ -642,7 +736,13 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
   }
 
   if (needSave) {
-    await saveToRelational(adapter, memoryDb);
+    await saveToRelational(adapter, memoryDb, { force: true });
+  } else {
+    // Mark current state as already persisted so first flush after boot is cheap
+    const payloads = tablePayloads(memoryDb);
+    for (const [name, data] of Object.entries(payloads)) {
+      lastSaveHashes[name] = stableHash(data);
+    }
   }
 
   return memoryDb;

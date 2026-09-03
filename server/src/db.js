@@ -333,10 +333,20 @@ async function flushRemote() {
 function scheduleRemoteFlush() {
   remoteDirty = true;
   if (remoteFlushTimer) return;
+  // D1 free tier counts every deleted/inserted row — debounce hard to avoid burning quota.
+  const delayMs = storeMode === 'd1' ? 8000 : 200;
   remoteFlushTimer = setTimeout(() => {
     remoteFlushTimer = null;
-    flushRemote().catch((err) => console.error('DB flush failed:', err.message));
-  }, 200);
+    flushRemote().catch((err) => {
+      const msg = err && err.message ? err.message : String(err);
+      console.error('DB flush failed:', msg);
+      if (/rows_written|exceeded|10100|too many/i.test(msg)) {
+        console.error(
+          'Tip: Cloudflare D1 free-tier write limit hit. Set TEAMTASK_SQLITE=1 and comment out CLOUDFLARE_* in .env until the daily limit resets.'
+        );
+      }
+    });
+  }, delayMs);
 }
 
 async function initPostgres(uri) {
@@ -476,6 +486,10 @@ async function initFileStore() {
  * TEAMTASK_DB_FALLBACK=none.
  */
 async function initDb() {
+  // Local SQLite wins when explicitly enabled — useful when D1 free-tier quota is exhausted.
+  const sqlitePath = getSqlitePath();
+  if (sqlitePath) return initSqlite(sqlitePath);
+
   const d1Config = getD1Config();
   if (d1Config) {
     try {
@@ -488,9 +502,6 @@ async function initDb() {
       throw err;
     }
   }
-
-  const sqlitePath = getSqlitePath();
-  if (sqlitePath) return initSqlite(sqlitePath);
 
   const pgUri = getPostgresUri();
   if (pgUri) {
