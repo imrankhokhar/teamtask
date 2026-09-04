@@ -106,18 +106,18 @@ export const SIDEBAR_RAIL = 56;
 
 /**
  * Equal-width cards from measured content area (not content text).
- * Phones: 1 column. Wider: 2–3 columns of identical fixed width.
- * Density comes from Settings → Card size (compact / comfortable / large).
+ * Density comes from Settings → Card size: preferred card width drives how many columns fit.
  */
 export type CardSize = 'compact' | 'comfortable' | 'large';
 
 const CARD_SIZE_PRESETS: Record<
   CardSize,
-  { colBreak2: number; colBreak3: number; padPhone: number; padDesktop: number; gap: number; cardPad: number }
+  { preferredCard: number; padPhone: number; padDesktop: number; gap: number; cardPad: number }
 > = {
-  compact: { colBreak2: 480, colBreak3: 780, padPhone: 8, padDesktop: 8, gap: 8, cardPad: 10 },
-  comfortable: { colBreak2: 560, colBreak3: 960, padPhone: 10, padDesktop: 12, gap: spacing.cardGap, cardPad: spacing.cardPad },
-  large: { colBreak2: 720, colBreak3: 1200, padPhone: 12, padDesktop: 16, gap: 14, cardPad: 18 },
+  // preferredCard drives column count on wide layouts; on 1-col Compact/Comfortable are capped to it.
+  compact: { preferredCard: 220, padPhone: 8, padDesktop: 8, gap: 8, cardPad: 10 },
+  comfortable: { preferredCard: 280, padPhone: 10, padDesktop: 12, gap: spacing.cardGap, cardPad: spacing.cardPad },
+  large: { preferredCard: 460, padPhone: 10, padDesktop: 14, gap: 18, cardPad: 22 },
 };
 
 export function listLayoutFor(windowWidth: number, contentWidth = 0, cardSize: CardSize = 'comfortable') {
@@ -130,8 +130,15 @@ export function listLayoutFor(windowWidth: number, contentWidth = 0, cardSize: C
       ? contentWidth
       : Math.max(200, windowWidth - (phone ? SIDEBAR_RAIL : 0));
   const inner = Math.max(160, column - pad * 2);
-  const cols = phone ? 1 : inner >= preset.colBreak3 ? 3 : inner >= preset.colBreak2 ? 2 : 1;
-  const cardWidth = Math.floor((inner - gap * (cols - 1)) / cols);
+  // How many preferred-width cards fit — Large prefers fewer, wider cards.
+  const cols = phone
+    ? 1
+    : Math.max(1, Math.min(4, Math.floor((inner + gap) / (preset.preferredCard + gap))));
+  let cardWidth = Math.floor((inner - gap * (cols - 1)) / cols);
+  // Single column: cap at preferred width so Compact/Comfortable stay visibly smaller than Large.
+  if (cols === 1) {
+    cardWidth = Math.min(inner, cardSize === 'large' ? inner : preset.preferredCard);
+  }
 
   return {
     phone,
@@ -144,7 +151,7 @@ export function listLayoutFor(windowWidth: number, contentWidth = 0, cardSize: C
     grid: {
       flexDirection: cols === 1 ? ('column' as const) : ('row' as const),
       flexWrap: cols === 1 ? ('nowrap' as const) : ('wrap' as const),
-      alignItems: 'flex-start' as const,
+      alignItems: cols === 1 ? ('center' as const) : ('flex-start' as const),
       alignContent: 'flex-start' as const,
       justifyContent: 'flex-start' as const,
       flexGrow: 0,
@@ -159,7 +166,7 @@ export function listLayoutFor(windowWidth: number, contentWidth = 0, cardSize: C
       width: cardWidth,
       maxWidth: cardWidth,
       minWidth: cardWidth,
-      alignSelf: 'flex-start' as const,
+      alignSelf: cols === 1 ? ('center' as const) : ('flex-start' as const),
       flexGrow: 0,
       flexShrink: 0,
       flexBasis: cardWidth,

@@ -189,7 +189,7 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
     cardShell: {
       width: layout.cardWidth,
       maxWidth: layout.cardWidth,
-      alignSelf: 'flex-start',
+      alignSelf: layout.cols === 1 ? 'center' : 'flex-start',
       flexGrow: 0,
       flexShrink: 0,
       flexBasis: 'auto',
