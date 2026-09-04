@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   StyleSheet,
   RefreshControl,
@@ -60,88 +60,98 @@ export default function TasksScreen({ navigation }: any) {
         {showInitialLoad ? (
           <LoadingView label="Loading tasks…" />
         ) : (
-          <FlatList
-            data={tasks}
-            keyExtractor={(item) => item.id}
+          <ScrollView
             style={styles.list}
+            contentContainerStyle={styles.grid}
+            keyboardShouldPersistTaps="handled"
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
             }
-            contentContainerStyle={styles.grid}
-            ListEmptyComponent={
+          >
+            {tasks.length === 0 ? (
               <Text style={styles.empty}>No tasks yet. Create one to get started.</Text>
-            }
-            renderItem={({ item }) => (
-              <View style={styles.cardShell}>
-              <TouchableOpacity
-                style={styles.card}
-                onPress={() => navigation.navigate('TaskDetail', { id: item.id })}
-                activeOpacity={0.85}
-              >
-                <View style={styles.row}>
-                  <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
-                    {item.title}
-                  </Text>
-                  <View
+            ) : (
+              tasks.map((item) => (
+                <View
+                  key={item.id}
+                  style={[
+                    styles.cardShell,
+                    Platform.OS === 'web' ? ({ height: 'fit-content' } as any) : null,
+                  ]}
+                >
+                  <TouchableOpacity
                     style={[
-                      styles.badge,
-                      { backgroundColor: statusColors[item.status] || colors.textMuted },
+                      styles.card,
+                      Platform.OS === 'web' ? ({ height: 'fit-content' } as any) : null,
                     ]}
+                    onPress={() => navigation.navigate('TaskDetail', { id: item.id })}
+                    activeOpacity={0.85}
                   >
-                    <Text style={styles.badgeText} numberOfLines={1}>
-                      {statusLabel(item.status)}
+                    <View style={styles.row}>
+                      <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
+                        {item.title}
+                      </Text>
+                      <View
+                        style={[
+                          styles.badge,
+                          { backgroundColor: statusColors[item.status] || colors.textMuted },
+                        ]}
+                      >
+                        <Text style={styles.badgeText} numberOfLines={1}>
+                          {statusLabel(item.status)}
+                        </Text>
+                      </View>
+                    </View>
+                    <CardDescription text={item.description} colors={colors} />
+                    <Text style={styles.meta} numberOfLines={1}>
+                      {(item.checklist || []).filter((c: any) => c.isChecked).length}/
+                      {(item.checklist || []).length} checklist · {(item.assignees || []).length}{' '}
+                      people · {(item.teams || []).length} teams
                     </Text>
-                  </View>
+                    {(can('tasks.edit') || can('tasks.delete')) && (
+                      <View style={styles.actions}>
+                        {can('tasks.edit') ? (
+                          <TouchableOpacity
+                            style={styles.mini}
+                            onPress={(e) => {
+                              e?.stopPropagation?.();
+                              navigation.navigate('CreateTask', { taskId: item.id });
+                            }}
+                          >
+                            <Ionicons name="create-outline" size={14} color={colors.accent} />
+                            <Text style={styles.miniText}>Edit</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                        {can('tasks.delete') ? (
+                          <TouchableOpacity
+                            style={[styles.mini, styles.danger]}
+                            onPress={async (e) => {
+                              e?.stopPropagation?.();
+                              const ok = await confirm({
+                                title: 'Delete task',
+                                message: `Delete task "${item.title}"? This cannot be undone.`,
+                                confirmLabel: 'Delete',
+                              });
+                              if (!ok) return;
+                              try {
+                                await api.deleteTask(item.id);
+                                await load();
+                              } catch (err: any) {
+                                Alert.alert('Error', err.message);
+                              }
+                            }}
+                          >
+                            <Ionicons name="trash-outline" size={14} color="#fff" />
+                            <Text style={styles.dangerText}>Delete</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    )}
+                  </TouchableOpacity>
                 </View>
-                <CardDescription text={item.description} colors={colors} />
-                <Text style={styles.meta} numberOfLines={1}>
-                  {(item.checklist || []).filter((c: any) => c.isChecked).length}/
-                  {(item.checklist || []).length} checklist · {(item.assignees || []).length}{' '}
-                  people · {(item.teams || []).length} teams
-                </Text>
-                {(can('tasks.edit') || can('tasks.delete')) && (
-                  <View style={styles.actions}>
-                    {can('tasks.edit') ? (
-                      <TouchableOpacity
-                        style={styles.mini}
-                        onPress={(e) => {
-                          e?.stopPropagation?.();
-                          navigation.navigate('CreateTask', { taskId: item.id });
-                        }}
-                      >
-                        <Ionicons name="create-outline" size={14} color={colors.accent} />
-                        <Text style={styles.miniText}>Edit</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                    {can('tasks.delete') ? (
-                      <TouchableOpacity
-                        style={[styles.mini, styles.danger]}
-                        onPress={async (e) => {
-                          e?.stopPropagation?.();
-                          const ok = await confirm({
-                            title: 'Delete task',
-                            message: `Delete task "${item.title}"? This cannot be undone.`,
-                            confirmLabel: 'Delete',
-                          });
-                          if (!ok) return;
-                          try {
-                            await api.deleteTask(item.id);
-                            await load();
-                          } catch (err: any) {
-                            Alert.alert('Error', err.message);
-                          }
-                        }}
-                      >
-                        <Ionicons name="trash-outline" size={14} color="#fff" />
-                        <Text style={styles.dangerText}>Delete</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                )}
-              </TouchableOpacity>
-              </View>
+              ))
             )}
-          />
+          </ScrollView>
         )}
 
         {can('tasks.create') ? (
@@ -182,6 +192,7 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
       alignSelf: 'flex-start',
       flexGrow: 0,
       flexShrink: 0,
+      flexBasis: 'auto',
     },
     card: {
       backgroundColor: colors.bgCard,
@@ -192,6 +203,7 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
       width: '100%',
       alignSelf: 'flex-start',
       flexGrow: 0,
+      flexShrink: 0,
     },
     row: {
       flexDirection: 'row',
