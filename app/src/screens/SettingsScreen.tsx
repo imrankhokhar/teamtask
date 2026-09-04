@@ -13,7 +13,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useAuth } from '../auth';
 import { api, ApiError, getApiBaseUrlSyncFallback } from '../api';
-import { useTheme, ThemeColors, ThemeMode, spacing } from '../theme';
+import { useTheme, ThemeColors, ThemeMode, CardSize, spacing } from '../theme';
 import AppShell from '../components/AppShell';
 import FormField from '../components/FormField';
 import { applyBrandingIcons } from '../brandingIcons';
@@ -73,6 +73,12 @@ const THEME_OPTIONS: { mode: ThemeMode; label: string; desc: string; icon: IconN
   { mode: 'system', label: 'System', desc: 'Match device setting', icon: 'phone-portrait-outline' },
 ];
 
+const CARD_SIZE_OPTIONS: { size: CardSize; label: string; desc: string; icon: IconName }[] = [
+  { size: 'compact', label: 'Compact', desc: 'More cards per row', icon: 'grid-outline' },
+  { size: 'comfortable', label: 'Comfortable', desc: 'Balanced default', icon: 'tablet-landscape-outline' },
+  { size: 'large', label: 'Large', desc: 'Fewer, bigger cards', icon: 'tablet-portrait-outline' },
+];
+
 function resolveUrl(path?: string | null) {
   if (!path) return null;
   if (path.startsWith('http')) return path;
@@ -81,7 +87,7 @@ function resolveUrl(path?: string | null) {
 
 export default function SettingsScreen({ navigation }: any) {
   const { user, can, settings, setSettings, refreshMe, isAdmin } = useAuth();
-  const { colors, mode, setMode, resolved } = useTheme();
+  const { colors, mode, setMode, resolved, cardSize, setCardSize } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const canBrand = isAdmin || can('settings.edit');
@@ -218,6 +224,34 @@ export default function SettingsScreen({ navigation }: any) {
                   key={opt.mode}
                   style={[styles.themeCard, on && styles.themeCardOn]}
                   onPress={() => setMode(opt.mode)}
+                >
+                  <Ionicons
+                    name={opt.icon}
+                    size={20}
+                    color={on ? colors.accent : colors.textMuted}
+                  />
+                  <Text style={[styles.themeLabel, on && styles.themeLabelOn]}>{opt.label}</Text>
+                  <Text style={styles.themeDesc}>{opt.desc}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Card size</Text>
+          <Text style={styles.sectionHint}>
+            Controls card density on Tasks, Users, Teams, Roles, and Notifications for this device
+            (web and app).
+          </Text>
+          <View style={styles.themeRow}>
+            {CARD_SIZE_OPTIONS.map((opt) => {
+              const on = cardSize === opt.size;
+              return (
+                <TouchableOpacity
+                  key={opt.size}
+                  style={[styles.themeCard, on && styles.themeCardOn]}
+                  onPress={() => setCardSize(opt.size)}
                 >
                   <Ionicons
                     name={opt.icon}

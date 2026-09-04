@@ -23,10 +23,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 
 export default function UsersScreen({ navigation }: any) {
   const { can } = useAuth();
-  const { colors } = useTheme();
+  const { colors, cardSize } = useTheme();
   const { width } = useWindowDimensions();
   const contentWidth = useContentWidth();
-  const layout = useMemo(() => listLayoutFor(width, contentWidth), [width, contentWidth]);
+  const layout = useMemo(() => listLayoutFor(width, contentWidth, cardSize), [width, contentWidth, cardSize]);
   const styles = useMemo(() => makeStyles(colors, layout), [colors, layout]);
   const { confirm, dialog } = useConfirm();
   const [users, setUsers] = useState<any[]>([]);
@@ -372,7 +372,7 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
     card: {
       backgroundColor: colors.bgCard,
       borderRadius: spacing.cardRadius,
-      padding: spacing.cardPad,
+      padding: layout.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
       ...layout.card,

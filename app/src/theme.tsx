@@ -107,17 +107,30 @@ export const SIDEBAR_RAIL = 56;
 /**
  * Equal-width cards from measured content area (not content text).
  * Phones: 1 column. Wider: 2–3 columns of identical fixed width.
+ * Density comes from Settings → Card size (compact / comfortable / large).
  */
-export function listLayoutFor(windowWidth: number, contentWidth = 0) {
+export type CardSize = 'compact' | 'comfortable' | 'large';
+
+const CARD_SIZE_PRESETS: Record<
+  CardSize,
+  { colBreak2: number; colBreak3: number; padPhone: number; padDesktop: number; gap: number; cardPad: number }
+> = {
+  compact: { colBreak2: 480, colBreak3: 780, padPhone: 8, padDesktop: 8, gap: 8, cardPad: 10 },
+  comfortable: { colBreak2: 560, colBreak3: 960, padPhone: 10, padDesktop: 12, gap: spacing.cardGap, cardPad: spacing.cardPad },
+  large: { colBreak2: 720, colBreak3: 1200, padPhone: 12, padDesktop: 16, gap: 14, cardPad: 18 },
+};
+
+export function listLayoutFor(windowWidth: number, contentWidth = 0, cardSize: CardSize = 'comfortable') {
+  const preset = CARD_SIZE_PRESETS[cardSize] || CARD_SIZE_PRESETS.comfortable;
   const phone = windowWidth < PHONE_MAX;
-  const pad = phone ? 10 : 12;
-  const gap = spacing.cardGap;
+  const pad = phone ? preset.padPhone : preset.padDesktop;
+  const gap = preset.gap;
   const column =
     contentWidth > 40
       ? contentWidth
       : Math.max(200, windowWidth - (phone ? SIDEBAR_RAIL : 0));
   const inner = Math.max(160, column - pad * 2);
-  const cols = phone ? 1 : inner >= 960 ? 3 : inner >= 560 ? 2 : 1;
+  const cols = phone ? 1 : inner >= preset.colBreak3 ? 3 : inner >= preset.colBreak2 ? 2 : 1;
   const cardWidth = Math.floor((inner - gap * (cols - 1)) / cols);
 
   return {
@@ -126,6 +139,8 @@ export function listLayoutFor(windowWidth: number, contentWidth = 0) {
     gap,
     cols,
     cardWidth,
+    cardPad: preset.cardPad,
+    cardSize,
     grid: {
       flexDirection: cols === 1 ? ('column' as const) : ('row' as const),
       flexWrap: cols === 1 ? ('nowrap' as const) : ('wrap' as const),
@@ -144,7 +159,6 @@ export function listLayoutFor(windowWidth: number, contentWidth = 0) {
       width: cardWidth,
       maxWidth: cardWidth,
       minWidth: cardWidth,
-      // Prevent FlatList row-wrap from stretching cards to the full list height
       alignSelf: 'flex-start' as const,
       flexGrow: 0,
       flexShrink: 0,
@@ -174,12 +188,15 @@ export const listCardLayout = {
 export let colors: ThemeColors = { ...darkColors };
 
 const STORAGE_KEY = 'theme_mode';
+const CARD_SIZE_KEY = 'card_size';
 
 type ThemeContextValue = {
   mode: ThemeMode;
   resolved: 'light' | 'dark';
   colors: ThemeColors;
   setMode: (mode: ThemeMode) => void;
+  cardSize: CardSize;
+  setCardSize: (size: CardSize) => void;
   ready: boolean;
 };
 
@@ -188,14 +205,21 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const system = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>('system');
+  const [cardSize, setCardSizeState] = useState<CardSize>('comfortable');
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (saved === 'light' || saved === 'dark' || saved === 'system') {
-          setModeState(saved);
+        const [savedTheme, savedCard] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEY),
+          AsyncStorage.getItem(CARD_SIZE_KEY),
+        ]);
+        if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'system') {
+          setModeState(savedTheme);
+        }
+        if (savedCard === 'compact' || savedCard === 'comfortable' || savedCard === 'large') {
+          setCardSizeState(savedCard);
         }
       } catch {
         // ignore
@@ -210,6 +234,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEY, next).catch(() => undefined);
   }, []);
 
+  const setCardSize = useCallback((next: CardSize) => {
+    setCardSizeState(next);
+    AsyncStorage.setItem(CARD_SIZE_KEY, next).catch(() => undefined);
+  }, []);
+
   const resolved: 'light' | 'dark' =
     mode === 'system' ? (system === 'light' ? 'light' : 'dark') : mode;
 
@@ -220,8 +249,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [palette]);
 
   const value = useMemo(
-    () => ({ mode, resolved, colors: palette, setMode, ready }),
-    [mode, resolved, palette, setMode, ready]
+    () => ({ mode, resolved, colors: palette, setMode, cardSize, setCardSize, ready }),
+    [mode, resolved, palette, setMode, cardSize, setCardSize, ready]
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
@@ -235,6 +264,8 @@ export function useTheme() {
       resolved: 'dark' as const,
       colors: darkColors,
       setMode: (_m: ThemeMode) => undefined,
+      cardSize: 'comfortable' as CardSize,
+      setCardSize: (_s: CardSize) => undefined,
       ready: true,
     };
   }
