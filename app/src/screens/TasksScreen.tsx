@@ -72,6 +72,7 @@ export default function TasksScreen({ navigation }: any) {
               <Text style={styles.empty}>No tasks yet. Create one to get started.</Text>
             }
             renderItem={({ item }) => (
+              <View style={styles.cardShell}>
               <TouchableOpacity
                 style={styles.card}
                 onPress={() => navigation.navigate('TaskDetail', { id: item.id })}
@@ -138,6 +139,7 @@ export default function TasksScreen({ navigation }: any) {
                   </View>
                 )}
               </TouchableOpacity>
+              </View>
             )}
           />
         )}
@@ -174,13 +176,22 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
     grid: {
       ...layout.grid,
     },
+    cardShell: {
+      width: layout.cardWidth,
+      maxWidth: layout.cardWidth,
+      alignSelf: 'flex-start',
+      flexGrow: 0,
+      flexShrink: 0,
+    },
     card: {
       backgroundColor: colors.bgCard,
       borderRadius: spacing.cardRadius,
       padding: spacing.cardPad,
       borderWidth: 1,
       borderColor: colors.border,
-      ...layout.card,
+      width: '100%',
+      alignSelf: 'flex-start',
+      flexGrow: 0,
     },
     row: {
       flexDirection: 'row',
