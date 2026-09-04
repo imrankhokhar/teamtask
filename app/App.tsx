@@ -69,7 +69,11 @@ function RootNav() {
   return (
     <>
       <StatusBar style={resolved === 'light' ? 'dark' : 'light'} />
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+      {/* Remount on auth change — conditional screens alone leave a blank route on web. */}
+      <Stack.Navigator
+        key={user ? 'app' : 'auth'}
+        screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}
+      >
         {!user ? (
           <>
             <Stack.Screen name="Login" component={LoginScreen} />

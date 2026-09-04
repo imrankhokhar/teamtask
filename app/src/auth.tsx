@@ -145,9 +145,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         syncNativeAuthToken(data.token);
         setToken(data.token);
         setUser(applyUser(data.user));
-        const me = await api.me();
-        setUser(applyUser(me.user));
-        setSettings({ ...emptySettings, ...(me.settings || {}) });
+        // Don't block / fail sign-in if /me is slow or errors — session is already valid.
+        try {
+          const me = await api.me();
+          setUser(applyUser(me.user));
+          setSettings({ ...emptySettings, ...(me.settings || {}) });
+        } catch {
+          // keep login payload
+        }
       },
       async register(name, email, password) {
         const data = await api.register({ name, email, password });
@@ -155,9 +160,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         syncNativeAuthToken(data.token);
         setToken(data.token);
         setUser(applyUser(data.user));
-        const me = await api.me();
-        setUser(applyUser(me.user));
-        setSettings({ ...emptySettings, ...(me.settings || {}) });
+        try {
+          const me = await api.me();
+          setUser(applyUser(me.user));
+          setSettings({ ...emptySettings, ...(me.settings || {}) });
+        } catch {
+          // keep register payload
+        }
       },
       async logout() {
         await AsyncStorage.removeItem('token');

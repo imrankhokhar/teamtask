@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -52,13 +52,18 @@ export default function TasksScreen({ navigation }: any) {
     }, [load])
   );
 
+  // Mount load as well — after auth stack remount, focus can miss once on web.
+  useEffect(() => {
+    load();
+  }, [load]);
+
   const showInitialLoad = (!loaded || refreshing) && tasks.length === 0;
 
   return (
     <AppShell navigation={navigation} active="Tasks" title="Tasks">
       <View style={styles.root}>
         {showInitialLoad ? (
-          <LoadingView label="Loading tasks…" />
+          <LoadingView label="Loading tasks…" fullScreen />
         ) : (
           <ScrollView
             style={styles.list}
