@@ -185,6 +185,7 @@ function createSeededDb() {
     checklistItems: [],
     checklistReplies: [],
     notifications: [],
+    fuelCalHistory: [],
     settings: {
       ringtoneUrl: null,
       ringtoneName: null,
@@ -220,6 +221,14 @@ function migrateDb(db) {
       member.permissions = [...member.permissions, 'fuel.view'];
       changed = true;
     }
+    if (member && Array.isArray(member.permissions) && !member.permissions.includes('fuel.history')) {
+      member.permissions = [...member.permissions, 'fuel.history'];
+      changed = true;
+    }
+  }
+  if (!Array.isArray(db.fuelCalHistory)) {
+    db.fuelCalHistory = [];
+    changed = true;
   }
   const adminRole = db.roles.find((r) => r.id === 'role-admin' || r.name === 'Admin');
   const memberRole = db.roles.find((r) => r.id === 'role-member' || r.name === 'Member');

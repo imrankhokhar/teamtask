@@ -283,6 +283,24 @@ export default function RolesScreen({ navigation }: any) {
                         </Text>
                       </TouchableOpacity>
                     ) : null}
+                    {mod.key === 'fuel' ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.chip,
+                          permissions.includes('fuel.history') && styles.chipOn,
+                        ]}
+                        onPress={() => togglePerm('fuel.history')}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            permissions.includes('fuel.history') && styles.chipTextOn,
+                          ]}
+                        >
+                          View history
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
               ))}

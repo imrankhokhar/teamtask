@@ -70,6 +70,7 @@ function seed() {
     ],
     checklistReplies: [],
     notifications: [],
+    fuelCalHistory: [],
     settings: { appName: 'TeamTask' },
   };
 }

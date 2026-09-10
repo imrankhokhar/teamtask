@@ -34,7 +34,6 @@ type HistoryRow = {
 };
 
 const STORAGE_KEY = 'fuel_cal_state_v1';
-const HISTORY_KEY = 'fuel_cal_history_v1';
 const DEFAULT_EMPLOYEES: Employee[] = [{ name: '', dist: 32, mil: 40 }];
 const PAGE_SIZE_OPTIONS = [5, 10, 15] as const;
 
@@ -54,8 +53,9 @@ function formatMoney(n: number) {
 
 export default function FuelCalScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { user: me } = useAuth();
+  const { user: me, can, isAdmin } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const canViewHistory = isAdmin || can('fuel.history');
   const [priceHike, setPriceHike] = useState('56');
   const [workingDays, setWorkingDays] = useState('22');
   const [employees, setEmployees] = useState<Employee[]>(DEFAULT_EMPLOYEES);
@@ -76,6 +76,19 @@ export default function FuelCalScreen({ navigation }: any) {
   const [pageSize, setPageSize] = useState<number>(10);
   const [page, setPage] = useState(1);
 
+  async function loadHistory() {
+    if (!canViewHistory) {
+      setHistory([]);
+      return;
+    }
+    try {
+      const data = await api.fuelCalHistory();
+      setHistory(Array.isArray(data.history) ? data.history : []);
+    } catch {
+      setHistory([]);
+    }
+  }
+
   useEffect(() => {
     (async () => {
       try {
@@ -90,16 +103,6 @@ export default function FuelCalScreen({ navigation }: any) {
         }
       } catch {
         // keep defaults
-      }
-
-      try {
-        const histRaw = await AsyncStorage.getItem(HISTORY_KEY);
-        if (histRaw) {
-          const parsed = JSON.parse(histRaw);
-          if (Array.isArray(parsed)) setHistory(parsed);
-        }
-      } catch {
-        // ignore
       } finally {
         setReady(true);
       }
@@ -158,8 +161,10 @@ export default function FuelCalScreen({ navigation }: any) {
           rows.map((row) => (row.name ? row : { ...row, name: myLabel }))
         );
       }
+
+      await loadHistory();
     })();
-  }, [me]);
+  }, [me, canViewHistory]);
 
   useEffect(() => {
     if (!ready) return;
@@ -172,11 +177,6 @@ export default function FuelCalScreen({ navigation }: any) {
       })
     ).catch(() => undefined);
   }, [priceHike, workingDays, employees, ready]);
-
-  useEffect(() => {
-    if (!ready) return;
-    AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(history)).catch(() => undefined);
-  }, [history, ready]);
 
   const hike = parseFloat(priceHike) || 0;
   const days = parseFloat(workingDays) || 0;
@@ -192,22 +192,22 @@ export default function FuelCalScreen({ navigation }: any) {
     setPage((p) => Math.min(p, Math.max(1, Math.ceil(history.length / pageSize) || 1)));
   }, [history.length, pageSize]);
 
-  function saveHistorySnapshot() {
-    const savedAt = new Date().toISOString();
-    const batchId = `${Date.now()}`;
-    const rows: HistoryRow[] = employees.map((emp, i) => ({
-      id: `${batchId}-${i}`,
-      savedAt,
+  async function saveHistorySnapshot() {
+    await api.saveFuelCalHistory({
       fuelPrice: hike,
       workDays: days,
-      name: emp.name || '—',
-      dist: emp.dist,
-      mil: emp.mil,
-      monthly: impacts[i] || 0,
       total,
-    }));
-    setHistory((prev) => [...rows, ...prev].slice(0, 500));
-    setPage(1);
+      rows: employees.map((emp, i) => ({
+        name: emp.name || '—',
+        dist: emp.dist,
+        mil: emp.mil,
+        monthly: impacts[i] || 0,
+      })),
+    });
+    if (canViewHistory) {
+      await loadHistory();
+      setPage(1);
+    }
   }
 
   function formatHistoryDate(iso: string) {
@@ -341,8 +341,12 @@ export default function FuelCalScreen({ navigation }: any) {
       } else {
         await Share.share({ message: tableText });
       }
-      saveHistorySnapshot();
-      setCopyStatus('Saved to history & ready to paste!');
+      try {
+        await saveHistorySnapshot();
+        setCopyStatus('Saved to history & ready to paste!');
+      } catch (e: any) {
+        setCopyStatus(e?.message || 'Copied, but history save failed');
+      }
       setTimeout(() => setCopyStatus(''), 2500);
     } catch {
       setCopyStatus('Copy failed');
@@ -496,22 +500,28 @@ export default function FuelCalScreen({ navigation }: any) {
               <Ionicons name="mail-outline" size={16} color={colors.onAccent} />
               <Text style={styles.emailBtnText}>Send Calculation via Email</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.historyBtn, historyOpen && styles.historyBtnOn]}
-              onPress={() => setHistoryOpen((v) => !v)}
-            >
-              <Ionicons
-                name="time-outline"
-                size={16}
-                color={historyOpen ? colors.onAccent : colors.accent}
-              />
-              <Text style={[styles.historyBtnText, historyOpen && styles.historyBtnTextOn]}>
-                History
-              </Text>
-            </TouchableOpacity>
+            {canViewHistory ? (
+              <TouchableOpacity
+                style={[styles.historyBtn, historyOpen && styles.historyBtnOn]}
+                onPress={() => {
+                  const next = !historyOpen;
+                  setHistoryOpen(next);
+                  if (next) loadHistory();
+                }}
+              >
+                <Ionicons
+                  name="time-outline"
+                  size={16}
+                  color={historyOpen ? colors.onAccent : colors.accent}
+                />
+                <Text style={[styles.historyBtnText, historyOpen && styles.historyBtnTextOn]}>
+                  History
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
-          {historyOpen ? (
+          {canViewHistory && historyOpen ? (
             <View style={styles.historySection}>
               <View style={styles.historyToolbar}>
                 <Text style={styles.historyTitle}>Calculation history</Text>

@@ -1446,6 +1446,52 @@ app.post('/api/checklist/:id/replies', authRequired, async (req, res) => {
   });
 });
 
+// ---------- Fuel Cal history ----------
+app.get('/api/fuel-cal/history', authRequired, requirePerm('fuel.view'), (req, res) => {
+  const db = readDb();
+  if (!req.isAdmin && !hasPermission(db, req.user, 'fuel.history')) {
+    return res.status(403).json({ error: 'Missing permission: fuel.history' });
+  }
+  const history = [...(db.fuelCalHistory || [])].sort(
+    (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
+  );
+  res.json({ history });
+});
+
+app.post('/api/fuel-cal/history', authRequired, requirePerm('fuel.view'), (req, res) => {
+  const fuelPrice = Number(req.body?.fuelPrice);
+  const workDays = Number(req.body?.workDays);
+  const total = Number(req.body?.total);
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  if (!Number.isFinite(fuelPrice) || !Number.isFinite(workDays)) {
+    return res.status(400).json({ error: 'fuelPrice and workDays are required' });
+  }
+  if (!rows.length) return res.status(400).json({ error: 'At least one row is required' });
+
+  const savedAt = new Date().toISOString();
+  const batchId = uuid();
+  const created = rows.map((row, i) => ({
+    id: `${batchId}-${i}`,
+    batchId,
+    savedAt,
+    fuelPrice,
+    workDays,
+    name: String(row?.name || '—').trim() || '—',
+    dist: Number(row?.dist) || 0,
+    mil: Number(row?.mil) || 0,
+    monthly: Number(row?.monthly) || 0,
+    total: Number.isFinite(total) ? total : Number(row?.total) || 0,
+    createdBy: req.user.id,
+  }));
+
+  updateDb((db) => {
+    db.fuelCalHistory = db.fuelCalHistory || [];
+    db.fuelCalHistory = [...created, ...db.fuelCalHistory].slice(0, 2000);
+  });
+
+  res.status(201).json({ history: created, batchId, savedAt });
+});
+
 // ---------- Notifications ----------
 app.get('/api/notifications', authRequired, (req, res) => {
   const db = readDb();

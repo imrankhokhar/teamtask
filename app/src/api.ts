@@ -194,6 +194,13 @@ export const api = {
   notifications: () => request('/api/notifications'),
   readAllNotifications: () =>
     request('/api/notifications/read-all', { method: 'POST' }),
+  fuelCalHistory: () => request('/api/fuel-cal/history'),
+  saveFuelCalHistory: (body: {
+    fuelPrice: number;
+    workDays: number;
+    total: number;
+    rows: { name: string; dist: number; mil: number; monthly: number }[];
+  }) => request('/api/fuel-cal/history', { method: 'POST', body }),
   settings: () => request('/api/settings'),
   branding: () => request('/api/branding', { token: null }),
   updateBranding: (body: { appName?: string; tagline?: string }) =>

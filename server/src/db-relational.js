@@ -93,6 +93,19 @@ const SCHEMA = [
     key TEXT PRIMARY KEY,
     value TEXT
   )`,
+  `CREATE TABLE IF NOT EXISTS fuel_cal_history (
+    id TEXT PRIMARY KEY,
+    batch_id TEXT NOT NULL,
+    saved_at TEXT NOT NULL,
+    fuel_price REAL NOT NULL,
+    work_days REAL NOT NULL,
+    name TEXT NOT NULL,
+    dist REAL NOT NULL,
+    mil REAL NOT NULL,
+    monthly REAL NOT NULL,
+    total REAL NOT NULL,
+    created_by TEXT
+  )`,
   // Legacy blob table — kept for one-time migration from old installs
   `CREATE TABLE IF NOT EXISTS appstate (
     id TEXT PRIMARY KEY,
@@ -382,6 +395,27 @@ async function loadFromRelational(adapter) {
 
   const settings = settingsFromRows(await adapter.query('SELECT * FROM app_settings'));
 
+  let fuelCalHistory = [];
+  try {
+    fuelCalHistory = (await adapter.query('SELECT * FROM fuel_cal_history ORDER BY saved_at DESC')).map(
+      (r) => ({
+        id: r.id,
+        batchId: r.batch_id,
+        savedAt: r.saved_at,
+        fuelPrice: Number(r.fuel_price) || 0,
+        workDays: Number(r.work_days) || 0,
+        name: r.name || '',
+        dist: Number(r.dist) || 0,
+        mil: Number(r.mil) || 0,
+        monthly: Number(r.monthly) || 0,
+        total: Number(r.total) || 0,
+        createdBy: r.created_by || null,
+      })
+    );
+  } catch {
+    fuelCalHistory = [];
+  }
+
   return {
     roles,
     users,
@@ -394,6 +428,7 @@ async function loadFromRelational(adapter) {
     checklistReplies,
     notifications,
     settings,
+    fuelCalHistory,
   };
 }
 
@@ -424,6 +459,7 @@ function normalizeDb(db) {
     checklistReplies: uniqByKey(db.checklistReplies, (x) => x.id),
     notifications: uniqByKey(db.notifications, (x) => x.id),
     settings: db.settings || {},
+    fuelCalHistory: uniqByKey(db.fuelCalHistory, (x) => x.id),
   };
 }
 
@@ -640,6 +676,31 @@ function buildIncrementalOps(prevDb, nextDb) {
   }
   for (const n of notes.upserts) ops.push(notificationInsert(n));
 
+  const fuelHist = diffByKey(prev.fuelCalHistory, next.fuelCalHistory, (x) => x.id);
+  for (const id of fuelHist.deletes) {
+    ops.push({ sql: 'DELETE FROM fuel_cal_history WHERE id = ?', params: [id] });
+  }
+  for (const h of fuelHist.upserts) {
+    ops.push({
+      sql: `INSERT OR REPLACE INTO fuel_cal_history (
+        id, batch_id, saved_at, fuel_price, work_days, name, dist, mil, monthly, total, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [
+        h.id,
+        h.batchId || '',
+        h.savedAt,
+        Number(h.fuelPrice) || 0,
+        Number(h.workDays) || 0,
+        h.name || '',
+        Number(h.dist) || 0,
+        Number(h.mil) || 0,
+        Number(h.monthly) || 0,
+        Number(h.total) || 0,
+        h.createdBy || null,
+      ],
+    });
+  }
+
   const prevSettings = settingsToRows(prev.settings);
   const nextSettings = settingsToRows(next.settings);
   const settingsDiff = diffByKey(prevSettings, nextSettings, (x) => x.key);
@@ -674,6 +735,7 @@ function buildFullReplaceOps(db) {
       'users',
       'roles',
       'app_settings',
+      'fuel_cal_history',
     ].map((t) => ({ sql: `DELETE FROM ${t}`, params: [] })),
     ...buildIncrementalOps(empty, next),
   ];

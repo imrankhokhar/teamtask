@@ -57,6 +57,7 @@ writeDb({
   checklistItems: [],
   checklistReplies: [],
   notifications: [],
+  fuelCalHistory: [],
   settings: {
     ringtoneUrl: null,
     ringtoneName: null,

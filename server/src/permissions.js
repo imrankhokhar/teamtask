@@ -22,6 +22,8 @@ function allPermissionKeys() {
   }
   // special: see all teams (not only assigned)
   keys.push('teams.view_all');
+  // special: view shared Fuel Cal copy-history
+  keys.push('fuel.history');
   return keys;
 }
 
@@ -49,6 +51,7 @@ function createDefaultRoles() {
         'teams.view',
         'notifications.view',
         'fuel.view',
+        'fuel.history',
         'settings.view',
       ],
       createdAt: new Date().toISOString(),
