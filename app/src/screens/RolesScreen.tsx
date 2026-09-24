@@ -301,6 +301,24 @@ export default function RolesScreen({ navigation }: any) {
                         </Text>
                       </TouchableOpacity>
                     ) : null}
+                    {mod.key === 'tasks' ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.chip,
+                          permissions.includes('tasks.status') && styles.chipOn,
+                        ]}
+                        onPress={() => togglePerm('tasks.status')}
+                      >
+                        <Text
+                          style={[
+                            styles.chipText,
+                            permissions.includes('tasks.status') && styles.chipTextOn,
+                          ]}
+                        >
+                          Change status
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 </View>
               ))}

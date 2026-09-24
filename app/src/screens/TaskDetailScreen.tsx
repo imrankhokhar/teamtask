@@ -28,10 +28,14 @@ export default function TaskDetailScreen({ route, navigation }: any) {
   const { confirm, dialog } = useConfirm();
   const [task, setTask] = useState<any>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
+  const [editingReplyText, setEditingReplyText] = useState('');
   const [newCheck, setNewCheck] = useState('');
   const [remindersLocal, setRemindersLocal] = useState<string[]>(['']);
   const [pickerIndex, setPickerIndex] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const canChangeStatus = isAdmin || can('tasks.status') || can('tasks.edit');
+  const canEditTask = isAdmin || can('tasks.edit');
 
   const load = useCallback(async () => {
     try {
@@ -135,6 +139,34 @@ export default function TaskDetailScreen({ route, navigation }: any) {
     }
   }
 
+  async function saveReplyEdit(replyId: string) {
+    const message = editingReplyText.trim();
+    if (!message) return Alert.alert('Message required');
+    try {
+      await api.updateChecklistReply(replyId, message);
+      setEditingReplyId(null);
+      setEditingReplyText('');
+      await load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  }
+
+  async function removeReply(reply: any) {
+    const ok = await confirm({
+      title: 'Delete comment',
+      message: 'Delete this checklist comment? This cannot be undone.',
+      confirmLabel: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await api.deleteChecklistReply(reply.id);
+      await load();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  }
+
   async function addChecklist() {
     if (!newCheck.trim()) return;
     try {
@@ -223,6 +255,15 @@ export default function TaskDetailScreen({ route, navigation }: any) {
 
         <View style={styles.titleRow}>
           <Text style={[styles.title, { flex: 1 }]}>{task.title}</Text>
+          {canEditTask ? (
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => navigation.navigate('CreateTask', { taskId: id })}
+            >
+              <Ionicons name="create-outline" size={16} color={colors.accent} />
+              <Text style={styles.editBtnText}>Edit</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
         <Text style={styles.desc}>{task.description || 'No description'}</Text>
 
@@ -235,20 +276,24 @@ export default function TaskDetailScreen({ route, navigation }: any) {
           <Text style={styles.statusPillText}>{statusLabel(task.status)}</Text>
         </View>
 
-        <Text style={styles.label}>Change status (notifies assignees)</Text>
-        <View style={styles.chips}>
-          {TASK_STATUSES.map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.chip, task.status === s && styles.chipOn]}
-              onPress={() => changeStatus(s)}
-            >
-              <Text style={[styles.chipText, task.status === s && styles.chipTextOn]}>
-                {statusLabel(s)}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {canChangeStatus ? (
+          <>
+            <Text style={styles.label}>Change status (notifies assignees)</Text>
+            <View style={styles.chips}>
+              {TASK_STATUSES.map((s) => (
+                <TouchableOpacity
+                  key={s}
+                  style={[styles.chip, task.status === s && styles.chipOn]}
+                  onPress={() => changeStatus(s)}
+                >
+                  <Text style={[styles.chipText, task.status === s && styles.chipTextOn]}>
+                    {statusLabel(s)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : null}
 
         <Text style={styles.label}>People</Text>
         <Text style={styles.meta}>
@@ -311,12 +356,62 @@ export default function TaskDetailScreen({ route, navigation }: any) {
               </View>
             </TouchableOpacity>
 
-            {(item.replies || []).map((r: any) => (
-              <View key={r.id} style={styles.reply}>
-                <Text style={styles.replyAuthor}>{r.user?.name || 'User'}</Text>
-                <Text style={styles.replyBody}>{r.message}</Text>
-              </View>
-            ))}
+            {(item.replies || []).map((r: any) => {
+              const canManageReply =
+                isAdmin || can('tasks.edit') || r.userId === user?.id || r.user?.id === user?.id;
+              const editing = editingReplyId === r.id;
+              return (
+                <View key={r.id} style={styles.reply}>
+                  <View style={styles.replyHeader}>
+                    <Text style={styles.replyAuthor}>{r.user?.name || 'User'}</Text>
+                    {canManageReply ? (
+                      <View style={styles.replyActions}>
+                        <TouchableOpacity
+                          onPress={() => {
+                            setEditingReplyId(r.id);
+                            setEditingReplyText(r.message || '');
+                          }}
+                        >
+                          <Text style={styles.replyActionText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => removeReply(r)}>
+                          <Text style={[styles.replyActionText, styles.replyDanger]}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : null}
+                  </View>
+                  {editing ? (
+                    <>
+                      <TextInput
+                        style={styles.input}
+                        value={editingReplyText}
+                        onChangeText={setEditingReplyText}
+                        placeholderTextColor={colors.textMuted}
+                      />
+                      <View style={styles.rowBtns}>
+                        <TouchableOpacity
+                          style={styles.miniBtn}
+                          onPress={() => saveReplyEdit(r.id)}
+                        >
+                          <Text style={styles.miniBtnText}>Save</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.miniBtn}
+                          onPress={() => {
+                            setEditingReplyId(null);
+                            setEditingReplyText('');
+                          }}
+                        >
+                          <Text style={styles.miniBtnText}>Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  ) : (
+                    <Text style={styles.replyBody}>{r.message}</Text>
+                  )}
+                </View>
+              );
+            })}
 
             <TextInput
               style={styles.input}
@@ -496,6 +591,15 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 10,
       padding: 8,
     },
+    replyHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 8,
+    },
+    replyActions: { flexDirection: 'row', gap: 10 },
+    replyActionText: { color: colors.accent, fontSize: 12, fontWeight: '700' },
+    replyDanger: { color: colors.danger },
     replyAuthor: { color: colors.accent, fontSize: 12, fontWeight: '700' },
     replyBody: { color: colors.text, marginTop: 2 },
     rowBtns: { flexDirection: 'row', gap: 8, marginTop: 8 },

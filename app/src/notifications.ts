@@ -6,7 +6,8 @@ import Constants from 'expo-constants';
 import { api, getApiBaseUrl, refreshApiUrl } from './api';
 import { useAuth, AppSettings } from './auth';
 import { emitAppNotify } from './notifyBus';
-import { playSoundWithFallback, ToneType } from './soundPlayer';
+import { playSoundWithFallback, playSyntheticChime, stopCurrentSound, ToneType } from './soundPlayer';
+import { navigateToTask } from './nav';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -111,24 +112,30 @@ function showWebBanner(n: { id?: string; title: string; body: string; taskId?: s
     body: n.body,
     url: n.taskId ? `/?task=${n.taskId}` : '/',
   };
+  const openFromClick = () => {
+    if (n.taskId) navigateToTask(String(n.taskId));
+  };
   const sw = (navigator as any).serviceWorker;
   if (sw?.ready) {
     sw.ready
       .then((reg: ServiceWorkerRegistration) => {
         if (reg.active) reg.active.postMessage(payload);
         else if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(n.title, { body: n.body });
+          const note = new Notification(n.title, { body: n.body, data: { taskId: n.taskId } });
+          note.onclick = openFromClick;
         }
       })
       .catch(() => {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-          new Notification(n.title, { body: n.body });
+          const note = new Notification(n.title, { body: n.body, data: { taskId: n.taskId } });
+          note.onclick = openFromClick;
         }
       });
     return;
   }
   if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-    new Notification(n.title, { body: n.body });
+    const note = new Notification(n.title, { body: n.body, data: { taskId: n.taskId } });
+    note.onclick = openFromClick;
   }
 }
 
@@ -164,17 +171,32 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
         toneKind = 'alert';
       }
       try {
+        // Tab already focused: don't play the full ringtone — short chime only.
+        const tabVisible =
+          Platform.OS === 'web' &&
+          typeof document !== 'undefined' &&
+          document.visibilityState === 'visible';
+        if (tabVisible && (type === 'reminder_due' || type === 'reminder_set')) {
+          await stopCurrentSound();
+          playSyntheticChime(toneKind);
+          return;
+        }
         await playSoundWithFallback(ringtoneUrl, toneKind);
       } catch {
         // ignore
       }
     }
 
-    async function presentNative(n: { title: string; body: string }) {
+    async function presentNative(n: { title: string; body: string; taskId?: string }) {
       if (hasPushRef.current) return;
       try {
         await Notifications.scheduleNotificationAsync({
-          content: { title: n.title, body: n.body, sound: true },
+          content: {
+            title: n.title,
+            body: n.body,
+            sound: true,
+            data: n.taskId ? { taskId: n.taskId } : {},
+          },
           trigger: null,
         });
       } catch {
@@ -273,7 +295,10 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
     })();
 
     const appSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') poll();
+      if (state === 'active') {
+        stopCurrentSound().catch(() => undefined);
+        poll();
+      }
     });
     const wake = () => {
       if (cancelled) return;
@@ -284,9 +309,27 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
         connectWs();
       }
     };
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        // Stop reminder/alarm audio as soon as the tab is focused.
+        stopCurrentSound().catch(() => undefined);
+        wake();
+      }
+    };
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       window.addEventListener('online', wake);
-      document.addEventListener('visibilitychange', wake);
+      document.addEventListener('visibilitychange', onVisible);
+      window.addEventListener('focus', onVisible);
+    }
+
+    let responseSub: { remove: () => void } | null = null;
+    try {
+      responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+        const taskId = (response.notification.request.content.data as any)?.taskId;
+        if (taskId) navigateToTask(String(taskId));
+      });
+    } catch {
+      // web / unsupported
     }
 
     return () => {
@@ -294,12 +337,14 @@ export function useRealtimeNotifications(onNotify?: (n: any) => void) {
       if (retryTimer) clearTimeout(retryTimer);
       if (pollTimer) clearInterval(pollTimer);
       appSub.remove();
+      responseSub?.remove();
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         window.removeEventListener('online', wake);
-        document.removeEventListener('visibilitychange', wake);
+        document.removeEventListener('visibilitychange', onVisible);
+        window.removeEventListener('focus', onVisible);
       }
       wsRef.current?.close();
-      soundRef.current?.unloadAsync().catch(() => undefined);
+      stopCurrentSound().catch(() => undefined);
     };
   }, [token]);
 }

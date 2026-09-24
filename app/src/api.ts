@@ -191,6 +191,10 @@ export const api = {
     request(`/api/checklist/${id}/uncheck`, { method: 'PATCH', body: { reason } }),
   replyItem: (id: string, message: string) =>
     request(`/api/checklist/${id}/replies`, { method: 'POST', body: { message } }),
+  updateChecklistReply: (id: string, message: string) =>
+    request(`/api/checklist-replies/${id}`, { method: 'PATCH', body: { message } }),
+  deleteChecklistReply: (id: string) =>
+    request(`/api/checklist-replies/${id}`, { method: 'DELETE' }),
   notifications: () => request('/api/notifications'),
   readAllNotifications: () =>
     request('/api/notifications/read-all', { method: 'POST' }),

@@ -158,18 +158,38 @@ async function processDueReminders() {
   updateDb((db) => {
     for (const task of db.tasks) {
       ensureTaskReminders(task);
+      const completed = task.status === 'completed';
       for (const rem of task.reminders) {
-        if (
-          rem.at &&
-          !rem.notified &&
-          new Date(rem.at).getTime() <= now
-        ) {
-          rem.notified = true;
-          due.push({
-            taskId: task.id,
-            title: task.title,
-            at: rem.at,
-          });
+        if (!rem.at) continue;
+        const atMs = new Date(rem.at).getTime();
+        if (Number.isNaN(atMs)) continue;
+
+        // Incomplete tasks: roll past due (already notified) reminders to the next day.
+        if (completed) {
+          if (!rem.notified && atMs <= now) {
+            rem.notified = true;
+            due.push({ taskId: task.id, title: task.title, at: rem.at });
+          }
+          continue;
+        }
+
+        if (!rem.notified && atMs <= now) {
+          due.push({ taskId: task.id, title: task.title, at: rem.at });
+          // Advance to next calendar day (same clock time) so assignees keep getting reminded.
+          const next = new Date(rem.at);
+          do {
+            next.setDate(next.getDate() + 1);
+          } while (next.getTime() <= now);
+          rem.at = next.toISOString();
+          rem.notified = false;
+        } else if (rem.notified && atMs <= now) {
+          // Revive stuck one-shot reminders from before roll-forward existed.
+          const next = new Date(rem.at);
+          do {
+            next.setDate(next.getDate() + 1);
+          } while (next.getTime() <= now);
+          rem.at = next.toISOString();
+          rem.notified = false;
         }
       }
       syncLegacyReminderFields(task);
@@ -1073,7 +1093,7 @@ app.post('/api/tasks', authRequired, requirePerm('tasks.create'), async (req, re
   res.status(201).json({ task: enrichTask(db, task) });
 });
 
-app.patch('/api/tasks/:id', authRequired, requirePerm('tasks.edit'), async (req, res) => {
+app.patch('/api/tasks/:id', authRequired, async (req, res) => {
   const taskId = req.params.id;
   if (!userCanAccessTask(req.user.id, taskId)) {
     return res.status(403).json({ error: 'Not assigned to this task' });
@@ -1092,6 +1112,27 @@ app.patch('/api/tasks/:id', authRequired, requirePerm('tasks.edit'), async (req,
     reminderAt,
     reminders: remindersInput,
   } = req.body || {};
+
+  const changingMoreThanStatus =
+    title != null ||
+    description != null ||
+    assigneeIds !== undefined ||
+    teamIds !== undefined ||
+    reminderAt !== undefined ||
+    remindersInput !== undefined;
+  const canEdit = req.isAdmin || hasPermission(db0, req.user, 'tasks.edit');
+  const canStatus =
+    req.isAdmin || hasPermission(db0, req.user, 'tasks.status') || canEdit;
+
+  if (changingMoreThanStatus && !canEdit) {
+    return res.status(403).json({ error: 'Missing permission: tasks.edit' });
+  }
+  if (status != null && !canStatus) {
+    return res.status(403).json({ error: 'Missing permission: tasks.status' });
+  }
+  if (status == null && !changingMoreThanStatus) {
+    return res.status(400).json({ error: 'No changes provided' });
+  }
 
   let statusChanged = false;
   let assigneesChanged = false;
@@ -1444,6 +1485,62 @@ app.post('/api/checklist/:id/replies', authRequired, async (req, res) => {
       user: publicUser(readDb().users.find((u) => u.id === req.user.id)),
     },
   });
+});
+
+app.patch('/api/checklist-replies/:id', authRequired, (req, res) => {
+  const replyId = req.params.id;
+  const message = String(req.body?.message || '').trim();
+  if (!message) return res.status(400).json({ error: 'message is required' });
+
+  const db0 = readDb();
+  const reply0 = (db0.checklistReplies || []).find((r) => r.id === replyId);
+  if (!reply0) return res.status(404).json({ error: 'Reply not found' });
+
+  const item0 = (db0.checklistItems || []).find((c) => c.id === reply0.checklistItemId);
+  if (!item0 || !userCanAccessTask(req.user.id, item0.taskId)) {
+    return res.status(403).json({ error: 'Not assigned to this task' });
+  }
+
+  const canManage =
+    req.isAdmin ||
+    hasPermission(db0, req.user, 'tasks.edit') ||
+    reply0.userId === req.user.id;
+  if (!canManage) return res.status(403).json({ error: 'Permission denied' });
+
+  let reply;
+  updateDb((db) => {
+    reply = (db.checklistReplies || []).find((r) => r.id === replyId);
+    if (reply) reply.message = message;
+  });
+  res.json({
+    reply: {
+      ...reply,
+      user: publicUser(readDb().users.find((u) => u.id === reply.userId)),
+    },
+  });
+});
+
+app.delete('/api/checklist-replies/:id', authRequired, (req, res) => {
+  const replyId = req.params.id;
+  const db0 = readDb();
+  const reply0 = (db0.checklistReplies || []).find((r) => r.id === replyId);
+  if (!reply0) return res.status(404).json({ error: 'Reply not found' });
+
+  const item0 = (db0.checklistItems || []).find((c) => c.id === reply0.checklistItemId);
+  if (!item0 || !userCanAccessTask(req.user.id, item0.taskId)) {
+    return res.status(403).json({ error: 'Not assigned to this task' });
+  }
+
+  const canManage =
+    req.isAdmin ||
+    hasPermission(db0, req.user, 'tasks.edit') ||
+    reply0.userId === req.user.id;
+  if (!canManage) return res.status(403).json({ error: 'Permission denied' });
+
+  updateDb((db) => {
+    db.checklistReplies = (db.checklistReplies || []).filter((r) => r.id !== replyId);
+  });
+  res.json({ ok: true });
 });
 
 // ---------- Fuel Cal history ----------

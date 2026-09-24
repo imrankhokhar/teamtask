@@ -226,6 +226,14 @@ function migrateDb(db) {
       changed = true;
     }
   }
+  // Grant tasks.status to any role that can edit tasks (and always to Admin via all keys above).
+  for (const role of db.roles || []) {
+    if (!Array.isArray(role.permissions)) continue;
+    if (role.permissions.includes('tasks.edit') && !role.permissions.includes('tasks.status')) {
+      role.permissions = [...role.permissions, 'tasks.status'];
+      changed = true;
+    }
+  }
   if (!Array.isArray(db.fuelCalHistory)) {
     db.fuelCalHistory = [];
     changed = true;

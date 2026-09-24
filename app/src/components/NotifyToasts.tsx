@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { onAppNotify } from '../notifyBus';
 import { useTheme, ThemeColors } from '../theme';
+import { navigationRef } from '../nav';
 
-type Toast = { key: string; title: string; body: string };
+type Toast = { key: string; title: string; body: string; taskId?: string };
 
 export default function NotifyToasts() {
   const { colors } = useTheme();
@@ -19,7 +20,12 @@ export default function NotifyToasts() {
   useEffect(() => {
     return onAppNotify((n) => {
       const key = String(n.id || `${Date.now()}-${Math.random()}`);
-      const toast = { key, title: n.title || 'Notification', body: n.body || '' };
+      const toast = {
+        key,
+        title: n.title || 'Notification',
+        body: n.body || '',
+        taskId: n.taskId ? String(n.taskId) : undefined,
+      };
       setToasts((list) => [toast, ...list].slice(0, 3));
       setTimeout(() => {
         setToasts((list) => list.filter((t) => t.key !== key));
@@ -27,16 +33,19 @@ export default function NotifyToasts() {
     });
   }, []);
 
+  function openToast(t: Toast) {
+    setToasts((list) => list.filter((x) => x.key !== t.key));
+    if (t.taskId && navigationRef.isReady()) {
+      navigationRef.navigate('TaskDetail' as never, { id: t.taskId } as never);
+    }
+  }
+
   if (!toasts.length) return null;
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { paddingTop: top }]}>
       {toasts.map((t) => (
-        <Pressable
-          key={t.key}
-          style={styles.card}
-          onPress={() => setToasts((list) => list.filter((x) => x.key !== t.key))}
-        >
+        <Pressable key={t.key} style={styles.card} onPress={() => openToast(t)}>
           <Text style={styles.title} numberOfLines={1}>
             {t.title}
           </Text>

@@ -4,7 +4,6 @@ import {
   NavigationContainer,
   DarkTheme,
   DefaultTheme,
-  createNavigationContainerRef,
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +12,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/auth';
 import { ThemeProvider, useTheme } from './src/theme';
 import { useRealtimeNotifications } from './src/notifications';
+import { navigationRef, consumeTaskDeepLink } from './src/nav';
 import LoginScreen from './src/screens/LoginScreen';
 import TasksScreen from './src/screens/TasksScreen';
 import CreateTaskScreen from './src/screens/CreateTaskScreen';
@@ -35,7 +35,6 @@ import LoadingView from './src/components/LoadingView';
 import NotifyToasts from './src/components/NotifyToasts';
 
 const Stack = createNativeStackNavigator();
-export const navigationRef = createNavigationContainerRef();
 
 function installAndroidBackBridge() {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -61,6 +60,13 @@ function RootNav() {
   React.useEffect(() => {
     refreshApiUrl().catch(() => undefined);
   }, []);
+
+  React.useEffect(() => {
+    if (!user) return;
+    // Deep link from SW / shared URL after auth is ready
+    const t = setTimeout(() => consumeTaskDeepLink(), 0);
+    return () => clearTimeout(t);
+  }, [user]);
 
   if (loading) {
     return <LoadingView fullScreen label="Starting TeamTask…" />;
@@ -131,7 +137,14 @@ function ThemedApp() {
   }
 
   return (
-    <NavigationContainer ref={navigationRef} theme={navTheme} onReady={installAndroidBackBridge}>
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navTheme}
+      onReady={() => {
+        installAndroidBackBridge();
+        consumeTaskDeepLink();
+      }}
+    >
       <RootNav />
       <NotifyToasts />
     </NavigationContainer>

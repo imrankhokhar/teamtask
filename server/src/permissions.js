@@ -24,6 +24,8 @@ function allPermissionKeys() {
   keys.push('teams.view_all');
   // special: view shared Fuel Cal copy-history
   keys.push('fuel.history');
+  // special: change task status without full edit
+  keys.push('tasks.status');
   return keys;
 }
 
@@ -48,6 +50,7 @@ function createDefaultRoles() {
         'tasks.create',
         'tasks.edit',
         'tasks.delete',
+        'tasks.status',
         'teams.view',
         'notifications.view',
         'fuel.view',

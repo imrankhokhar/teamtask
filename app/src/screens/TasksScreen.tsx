@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { api, statusLabel } from '../api';
+import { api, statusLabel, TASK_STATUSES } from '../api';
 import { useTheme, ThemeColors, statusColors, spacing, listLayoutFor } from '../theme';
 import { useAuth } from '../auth';
 import { useContentWidth } from '../contentWidth';
@@ -32,6 +32,7 @@ export default function TasksScreen({ navigation }: any) {
   const [tasks, setTasks] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const load = useCallback(async () => {
     try {
@@ -57,6 +58,18 @@ export default function TasksScreen({ navigation }: any) {
     load();
   }, [load]);
 
+  const filteredTasks = useMemo(() => {
+    const list =
+      statusFilter === 'all' ? tasks : tasks.filter((t) => t.status === statusFilter);
+    const order = Object.fromEntries(TASK_STATUSES.map((s, i) => [s, i]));
+    return [...list].sort((a, b) => {
+      const ao = order[a.status] ?? 99;
+      const bo = order[b.status] ?? 99;
+      if (ao !== bo) return ao - bo;
+      return String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''));
+    });
+  }, [tasks, statusFilter]);
+
   const showInitialLoad = (!loaded || refreshing) && tasks.length === 0;
 
   return (
@@ -73,10 +86,46 @@ export default function TasksScreen({ navigation }: any) {
               <RefreshControl refreshing={refreshing} onRefresh={load} tintColor={colors.accent} />
             }
           >
-            {tasks.length === 0 ? (
-              <Text style={styles.empty}>No tasks yet. Create one to get started.</Text>
+            <View style={styles.filterBar}>
+              <TouchableOpacity
+                style={[styles.filterChip, statusFilter === 'all' && styles.filterChipOn]}
+                onPress={() => setStatusFilter('all')}
+              >
+                <Text
+                  style={[styles.filterChipText, statusFilter === 'all' && styles.filterChipTextOn]}
+                >
+                  All ({tasks.length})
+                </Text>
+              </TouchableOpacity>
+              {TASK_STATUSES.map((s) => {
+                const count = tasks.filter((t) => t.status === s).length;
+                const on = statusFilter === s;
+                return (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.filterChip,
+                      on && styles.filterChipOn,
+                      on && { backgroundColor: statusColors[s] || colors.accent },
+                    ]}
+                    onPress={() => setStatusFilter(s)}
+                  >
+                    <Text style={[styles.filterChipText, on && styles.filterChipTextOn]}>
+                      {statusLabel(s)} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {filteredTasks.length === 0 ? (
+              <Text style={styles.empty}>
+                {tasks.length === 0
+                  ? 'No tasks yet. Create one to get started.'
+                  : 'No tasks match this status filter.'}
+              </Text>
             ) : (
-              tasks.map((item) => (
+              filteredTasks.map((item) => (
                 <View
                   key={item.id}
                   style={[
@@ -254,6 +303,30 @@ function makeStyles(colors: ThemeColors, layout: ReturnType<typeof listLayoutFor
       minWidth: 0,
     },
     empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40, width: '100%' },
+    filterBar: {
+      width: '100%',
+      flexBasis: '100%',
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginBottom: 4,
+    },
+    filterChip: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      backgroundColor: colors.bgElevated,
+    },
+    filterChipOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+    filterChipText: {
+      color: colors.text,
+      fontSize: 12,
+      fontWeight: '600',
+      textTransform: 'capitalize',
+    },
+    filterChipTextOn: { color: colors.onAccent, fontWeight: '800' },
     fabRow: {
       position: 'absolute',
       right: 16,
