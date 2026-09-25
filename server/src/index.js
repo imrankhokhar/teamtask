@@ -152,74 +152,115 @@ function ensureUserFromMember(db, { firstName, lastName, email, roleId }, create
   return user;
 }
 
-async function processDueReminders() {
-  const now = Date.now();
-  const due = [];
-  updateDb((db) => {
-    for (const task of db.tasks) {
-      ensureTaskReminders(task);
-      const completed = task.status === 'completed';
-      for (const rem of task.reminders) {
-        if (!rem.at) continue;
-        const atMs = new Date(rem.at).getTime();
-        if (Number.isNaN(atMs)) continue;
-
-        // Incomplete tasks: roll past due (already notified) reminders to the next day.
-        if (completed) {
-          if (!rem.notified && atMs <= now) {
-            rem.notified = true;
-            due.push({ taskId: task.id, title: task.title, at: rem.at });
-          }
-          continue;
-        }
-
-        if (!rem.notified && atMs <= now) {
-          due.push({ taskId: task.id, title: task.title, at: rem.at });
-          // Advance to next calendar day (same clock time) so assignees keep getting reminded.
-          const next = new Date(rem.at);
-          do {
-            next.setDate(next.getDate() + 1);
-          } while (next.getTime() <= now);
-          rem.at = next.toISOString();
-          rem.notified = false;
-        } else if (rem.notified && atMs <= now) {
-          // Revive stuck one-shot reminders from before roll-forward existed.
-          const next = new Date(rem.at);
-          do {
-            next.setDate(next.getDate() + 1);
-          } while (next.getTime() <= now);
-          rem.at = next.toISOString();
-          rem.notified = false;
-        }
-      }
-      syncLegacyReminderFields(task);
-    }
-  });
-  for (const item of due) {
-    await notifyTaskUsers(item.taskId, {
-      type: 'reminder_due',
-      title: 'Task reminder',
-      body: `Reminder: "${item.title}"`,
-      excludeUserId: null,
-      emailVars: {
-        taskTitle: item.title,
-        reminderAt: new Date(item.at).toLocaleString(),
-      },
-    });
+/** Advance by whole days until strictly after `afterMs` (avoids local TZ setDate quirks). */
+function nextDailyOccurrence(fromIso, afterMs) {
+  const day = 24 * 60 * 60 * 1000;
+  let t = new Date(fromIso).getTime();
+  if (Number.isNaN(t)) t = afterMs;
+  if (t <= afterMs) {
+    t += (Math.floor((afterMs - t) / day) + 1) * day;
   }
-  return due.length;
+  while (t <= afterMs) t += day;
+  return new Date(t).toISOString();
+}
+
+function sameReminderInstant(a, b) {
+  const ta = new Date(a).getTime();
+  const tb = new Date(b).getTime();
+  return !Number.isNaN(ta) && !Number.isNaN(tb) && ta === tb;
+}
+
+/** Prevent overlapping cron passes (notify can take longer than 15s). */
+let reminderPassRunning = false;
+
+async function processDueReminders() {
+  if (reminderPassRunning) return 0;
+  reminderPassRunning = true;
+  try {
+    const now = Date.now();
+    // Hard cap: never notify the same reminder more than once per ~20h.
+    const MIN_GAP_MS = 20 * 60 * 60 * 1000;
+    const RECENT_DUE_MS = 60 * 60 * 1000;
+    const due = [];
+
+    updateDb((db) => {
+      for (const task of db.tasks || []) {
+        ensureTaskReminders(task);
+        const completed = task.status === 'completed';
+
+        for (const rem of task.reminders || []) {
+          if (!rem.at) continue;
+          const atMs = new Date(rem.at).getTime();
+          if (Number.isNaN(atMs) || atMs > now) continue;
+
+          const lastFired = rem.lastFiredAt ? new Date(rem.lastFiredAt).getTime() : 0;
+          const firedRecently = lastFired && now - lastFired < MIN_GAP_MS;
+          const dueRecently = atMs > now - RECENT_DUE_MS;
+
+          if (completed) {
+            if (!rem.notified) {
+              rem.notified = true;
+              if (!firedRecently && dueRecently) {
+                due.push({ taskId: task.id, title: task.title, at: rem.at });
+                rem.lastFiredAt = new Date(now).toISOString();
+              }
+            }
+            continue;
+          }
+
+          // Incomplete: notify at most once / day when actually due recently.
+          // Long-overdue backlog only rolls forward (no notification storm).
+          if (!firedRecently && dueRecently) {
+            due.push({ taskId: task.id, title: task.title, at: rem.at });
+            rem.lastFiredAt = new Date(now).toISOString();
+          } else if (!rem.lastFiredAt) {
+            rem.lastFiredAt = new Date(now).toISOString();
+          }
+          rem.at = nextDailyOccurrence(rem.at, now);
+          rem.notified = false;
+        }
+
+        syncLegacyReminderFields(task);
+      }
+    });
+
+    for (const item of due) {
+      await notifyTaskUsers(item.taskId, {
+        type: 'reminder_due',
+        title: 'Task reminder',
+        body: `Reminder: "${item.title}"`,
+        excludeUserId: null,
+        emailVars: {
+          taskTitle: item.title,
+          reminderAt: new Date(item.at).toLocaleString(),
+        },
+      });
+    }
+    return due.length;
+  } finally {
+    reminderPassRunning = false;
+  }
 }
 
 /** Migrate legacy reminderAt into reminders[]; keep both in sync. */
 function ensureTaskReminders(task) {
   if (!Array.isArray(task.reminders)) task.reminders = [];
+  // Dedupe by instant — mismatched ISO strings used to create a new past reminder every cron tick.
+  const seen = new Set();
+  task.reminders = task.reminders.filter((r) => {
+    if (!r?.at) return false;
+    const key = String(new Date(r.at).getTime());
+    if (key === 'NaN' || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   if (
     task.reminderAt &&
-    !task.reminders.some((r) => r.at === task.reminderAt)
+    !task.reminders.some((r) => sameReminderInstant(r.at, task.reminderAt))
   ) {
     task.reminders.push({
       id: uuid(),
-      at: task.reminderAt,
+      at: new Date(task.reminderAt).toISOString(),
       notified: Boolean(task.reminderNotified),
     });
   }
@@ -257,7 +298,13 @@ function buildRemindersFromAts(ats, existing = []) {
     if (seen.has(at)) continue;
     seen.add(at);
     const prev = existing.find((r) => r.at === at);
-    list.push(prev || { id: uuid(), at, notified: false });
+    list.push(
+      prev || {
+        id: uuid(),
+        at,
+        notified: false,
+      }
+    );
   }
   return list.sort((a, b) => new Date(a.at) - new Date(b.at));
 }
