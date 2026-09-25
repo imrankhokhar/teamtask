@@ -498,7 +498,8 @@ async function initFileStore() {
 
 /**
  * Call once before accepting traffic.
- * Priority: Cloudflare D1 → TEAMTASK_SQLITE → DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
+ * Priority: TEAMTASK_SQLITE → Cloudflare D1 (falls back to SQLite on quota errors) →
+ * DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
  * In development, unreachable cloud DB falls back to local file unless
  * TEAMTASK_DB_FALLBACK=none.
  */
@@ -516,6 +517,17 @@ async function initDb() {
         'Cloudflare D1 initialization failed:',
         formatDbError(err)
       );
+      const msg = formatDbError(err);
+      // Free-tier read/write caps — keep the site up on local SQLite until midnight UTC.
+      if (/exceeded|row read|rows_written|free tier|10100|too many/i.test(msg)) {
+        const fallbackPath = path.join(DATA_DIR, 'teamtask.sqlite');
+        console.warn(
+          'D1 quota exceeded — falling back to SQLite at',
+          fallbackPath,
+          '(set TEAMTASK_SQLITE=1 and comment CLOUDFLARE_* to skip D1 until the limit resets)'
+        );
+        return initSqlite(fallbackPath);
+      }
       throw err;
     }
   }
