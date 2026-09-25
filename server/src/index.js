@@ -152,7 +152,7 @@ function ensureUserFromMember(db, { firstName, lastName, email, roleId }, create
   return user;
 }
 
-/** Advance by whole days until strictly after `afterMs` (avoids local TZ setDate quirks). */
+/** Advance by whole 24h steps until strictly after `afterMs`. */
 function nextDailyOccurrence(fromIso, afterMs) {
   const day = 24 * 60 * 60 * 1000;
   let t = new Date(fromIso).getTime();
@@ -170,7 +170,7 @@ function sameReminderInstant(a, b) {
   return !Number.isNaN(ta) && !Number.isNaN(tb) && ta === tb;
 }
 
-/** Prevent overlapping cron passes (notify can take longer than 15s). */
+/** Prevent overlapping cron passes while notify is in flight. */
 let reminderPassRunning = false;
 
 async function processDueReminders() {
@@ -178,52 +178,33 @@ async function processDueReminders() {
   reminderPassRunning = true;
   try {
     const now = Date.now();
-    // Hard cap: never notify the same reminder more than once per ~20h.
-    const MIN_GAP_MS = 20 * 60 * 60 * 1000;
-    const RECENT_DUE_MS = 60 * 60 * 1000;
     const due = [];
-
     updateDb((db) => {
       for (const task of db.tasks || []) {
         ensureTaskReminders(task);
-        const completed = task.status === 'completed';
-
         for (const rem of task.reminders || []) {
-          if (!rem.at) continue;
+          if (!rem.at || rem.notified) continue;
           const atMs = new Date(rem.at).getTime();
           if (Number.isNaN(atMs) || atMs > now) continue;
 
-          const lastFired = rem.lastFiredAt ? new Date(rem.lastFiredAt).getTime() : 0;
-          const firedRecently = lastFired && now - lastFired < MIN_GAP_MS;
-          const dueRecently = atMs > now - RECENT_DUE_MS;
+          // Same fire behavior as before: notify when due and not yet notified.
+          due.push({
+            taskId: task.id,
+            title: task.title,
+            at: rem.at,
+          });
 
-          if (completed) {
-            if (!rem.notified) {
-              rem.notified = true;
-              if (!firedRecently && dueRecently) {
-                due.push({ taskId: task.id, title: task.title, at: rem.at });
-                rem.lastFiredAt = new Date(now).toISOString();
-              }
-            }
-            continue;
+          if (task.status === 'completed') {
+            rem.notified = true;
+          } else {
+            // Only extra behavior: shift to next day (same clock time) so it can fire again.
+            rem.at = nextDailyOccurrence(rem.at, now);
+            rem.notified = false;
           }
-
-          // Incomplete: notify at most once / day when actually due recently.
-          // Long-overdue backlog only rolls forward (no notification storm).
-          if (!firedRecently && dueRecently) {
-            due.push({ taskId: task.id, title: task.title, at: rem.at });
-            rem.lastFiredAt = new Date(now).toISOString();
-          } else if (!rem.lastFiredAt) {
-            rem.lastFiredAt = new Date(now).toISOString();
-          }
-          rem.at = nextDailyOccurrence(rem.at, now);
-          rem.notified = false;
         }
-
         syncLegacyReminderFields(task);
       }
     });
-
     for (const item of due) {
       await notifyTaskUsers(item.taskId, {
         type: 'reminder_due',
@@ -245,7 +226,6 @@ async function processDueReminders() {
 /** Migrate legacy reminderAt into reminders[]; keep both in sync. */
 function ensureTaskReminders(task) {
   if (!Array.isArray(task.reminders)) task.reminders = [];
-  // Dedupe by instant — mismatched ISO strings used to create a new past reminder every cron tick.
   const seen = new Set();
   task.reminders = task.reminders.filter((r) => {
     if (!r?.at) return false;

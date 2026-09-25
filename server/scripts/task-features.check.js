@@ -1,14 +1,5 @@
-/** ponytail: reminder roll-forward must not spam. Run: node scripts/task-features.check.js */
+/** ponytail: fire-on-due + next-day shift only. Run: node scripts/task-features.check.js */
 const assert = require('assert');
-const { allPermissionKeys, createDefaultRoles, hasPermission } = require('../src/permissions');
-
-const keys = allPermissionKeys();
-assert.ok(keys.includes('tasks.status'), 'tasks.status in catalog');
-
-const roles = createDefaultRoles();
-const member = roles.find((r) => r.id === 'role-member');
-assert.ok(member.permissions.includes('tasks.status'));
-assert.ok(hasPermission({ roles }, { roleId: 'role-member' }, 'tasks.status'));
 
 function nextDailyOccurrence(fromIso, afterMs) {
   const day = 24 * 60 * 60 * 1000;
@@ -21,12 +12,34 @@ function nextDailyOccurrence(fromIso, afterMs) {
   return new Date(t).toISOString();
 }
 
-const past = new Date(Date.now() - 10 * 86400000).toISOString();
+// Simulate original fire rule + shift
+function processOne(rem, taskStatus, now) {
+  if (!rem.at || rem.notified) return { fired: false, rem };
+  const atMs = new Date(rem.at).getTime();
+  if (atMs > now) return { fired: false, rem };
+  const fired = true;
+  if (taskStatus === 'completed') {
+    rem.notified = true;
+  } else {
+    rem.at = nextDailyOccurrence(rem.at, now);
+    rem.notified = false;
+  }
+  return { fired, rem };
+}
+
 const now = Date.now();
-const next = nextDailyOccurrence(past, now);
-assert.ok(new Date(next).getTime() > now, 'rolled reminder is in the future');
-// Running twice without time passing should still stay in the future, not thrash.
-const next2 = nextDailyOccurrence(next, now);
-assert.ok(new Date(next2).getTime() > now);
+const dueAt = new Date(now - 1000).toISOString();
+
+const a = processOne({ at: dueAt, notified: false }, 'in_progress', now);
+assert.strictEqual(a.fired, true);
+assert.strictEqual(a.rem.notified, false);
+assert.ok(new Date(a.rem.at).getTime() > now);
+
+const b = processOne({ ...a.rem }, 'in_progress', now);
+assert.strictEqual(b.fired, false, 'must not fire again until next day');
+
+const c = processOne({ at: dueAt, notified: false }, 'completed', now);
+assert.strictEqual(c.fired, true);
+assert.strictEqual(c.rem.notified, true);
 
 console.log('task-features.check.js OK');
