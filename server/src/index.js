@@ -187,20 +187,20 @@ async function processDueReminders() {
           const atMs = new Date(rem.at).getTime();
           if (Number.isNaN(atMs) || atMs > now) continue;
 
-          // Same fire behavior as before: notify when due and not yet notified.
+          if (task.status === 'completed') {
+            // Due but completed: no notification, no date shift — just stop this reminder.
+            rem.notified = true;
+            continue;
+          }
+
+          // Incomplete: fire once, then move to next day (same time).
           due.push({
             taskId: task.id,
             title: task.title,
             at: rem.at,
           });
-
-          if (task.status === 'completed') {
-            rem.notified = true;
-          } else {
-            // Only extra behavior: shift to next day (same clock time) so it can fire again.
-            rem.at = nextDailyOccurrence(rem.at, now);
-            rem.notified = false;
-          }
+          rem.at = nextDailyOccurrence(rem.at, now);
+          rem.notified = false;
         }
         syncLegacyReminderFields(task);
       }
