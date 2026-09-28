@@ -178,6 +178,8 @@ async function processDueReminders() {
   reminderPassRunning = true;
   try {
     const now = Date.now();
+    // Safety: never notify the same reminder more than once per ~20h (stops D1 spam if date shift fails).
+    const MIN_FIRE_GAP_MS = 20 * 60 * 60 * 1000;
     const due = [];
     updateDb((db) => {
       for (const task of db.tasks || []) {
@@ -193,19 +195,32 @@ async function processDueReminders() {
             continue;
           }
 
+          const lastFired = rem.lastFiredAt ? new Date(rem.lastFiredAt).getTime() : 0;
+          if (lastFired && now - lastFired < MIN_FIRE_GAP_MS) {
+            // Already fired recently — only repair a stuck past date, do not notify again.
+            rem.at = nextDailyOccurrence(rem.at, now);
+            rem.notified = false;
+            continue;
+          }
+
           // Incomplete: fire once, then move to next day (same time).
           due.push({
             taskId: task.id,
             title: task.title,
             at: rem.at,
+            remId: rem.id,
           });
+          rem.lastFiredAt = new Date(now).toISOString();
           rem.at = nextDailyOccurrence(rem.at, now);
           rem.notified = false;
         }
         syncLegacyReminderFields(task);
       }
     });
-    for (const item of due) {
+
+    // Hard cap one pass — protects D1 if many tasks were overdue.
+    const batch = due.slice(0, 10);
+    for (const item of batch) {
       await notifyTaskUsers(item.taskId, {
         type: 'reminder_due',
         title: 'Task reminder',
@@ -217,7 +232,7 @@ async function processDueReminders() {
         },
       });
     }
-    return due.length;
+    return batch.length;
   } finally {
     reminderPassRunning = false;
   }
@@ -238,11 +253,24 @@ function ensureTaskReminders(task) {
     task.reminderAt &&
     !task.reminders.some((r) => sameReminderInstant(r.at, task.reminderAt))
   ) {
-    task.reminders.push({
-      id: uuid(),
-      at: new Date(task.reminderAt).toISOString(),
-      notified: Boolean(task.reminderNotified),
-    });
+    const atMs = new Date(task.reminderAt).getTime();
+    if (Number.isNaN(atMs)) {
+      // ignore bad legacy value
+    } else if (atMs <= Date.now()) {
+      // Never inject a past-due legacy reminder (that re-fired every cron tick and burned D1).
+      task.reminders.push({
+        id: uuid(),
+        at: nextDailyOccurrence(task.reminderAt, Date.now()),
+        notified: false,
+        lastFiredAt: new Date().toISOString(),
+      });
+    } else {
+      task.reminders.push({
+        id: uuid(),
+        at: new Date(task.reminderAt).toISOString(),
+        notified: Boolean(task.reminderNotified),
+      });
+    }
   }
   return task.reminders;
 }
@@ -2172,8 +2200,8 @@ if (webRoot) {
   console.log('Web UI not found. Candidates:', webCandidates);
 }
 
-// Reminder checker — every 15 seconds (local device)
-cron.schedule('*/15 * * * * *', async () => {
+// Reminder checker — every 5 minutes (was 15s; that burned D1 free-tier reads/writes)
+cron.schedule('*/5 * * * *', async () => {
   try {
     await processDueReminders();
   } catch (err) {

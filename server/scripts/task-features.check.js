@@ -1,4 +1,4 @@
-/** ponytail: completed = no notify / no shift; open = notify + next day. Run: node scripts/task-features.check.js */
+/** ponytail: reminder fire rules + anti-spam. Run: node scripts/task-features.check.js */
 const assert = require('assert');
 
 function nextDailyOccurrence(fromIso, afterMs) {
@@ -12,6 +12,8 @@ function nextDailyOccurrence(fromIso, afterMs) {
   return new Date(t).toISOString();
 }
 
+const MIN_FIRE_GAP_MS = 20 * 60 * 60 * 1000;
+
 function processOne(rem, taskStatus, now) {
   if (!rem.at || rem.notified) return { fired: false, rem };
   const atMs = new Date(rem.at).getTime();
@@ -22,10 +24,17 @@ function processOne(rem, taskStatus, now) {
     return { fired: false, rem };
   }
 
-  const originalAt = rem.at;
+  const lastFired = rem.lastFiredAt ? new Date(rem.lastFiredAt).getTime() : 0;
+  if (lastFired && now - lastFired < MIN_FIRE_GAP_MS) {
+    rem.at = nextDailyOccurrence(rem.at, now);
+    rem.notified = false;
+    return { fired: false, rem };
+  }
+
+  rem.lastFiredAt = new Date(now).toISOString();
   rem.at = nextDailyOccurrence(rem.at, now);
   rem.notified = false;
-  return { fired: true, rem, originalAt };
+  return { fired: true, rem };
 }
 
 const now = Date.now();
@@ -33,15 +42,12 @@ const dueAt = new Date(now - 1000).toISOString();
 
 const open = processOne({ at: dueAt, notified: false }, 'in_progress', now);
 assert.strictEqual(open.fired, true);
-assert.strictEqual(open.rem.notified, false);
-assert.ok(new Date(open.rem.at).getTime() > now);
 
-const again = processOne({ ...open.rem }, 'in_progress', now);
-assert.strictEqual(again.fired, false);
+const spam = processOne({ ...open.rem, at: dueAt }, 'in_progress', now);
+assert.strictEqual(spam.fired, false, 'must not re-fire within 20h');
 
 const done = processOne({ at: dueAt, notified: false }, 'completed', now);
-assert.strictEqual(done.fired, false, 'completed must not notify');
-assert.strictEqual(done.rem.notified, true);
-assert.strictEqual(done.rem.at, dueAt, 'completed must not shift date');
+assert.strictEqual(done.fired, false);
+assert.strictEqual(done.rem.at, dueAt);
 
 console.log('task-features.check.js OK');

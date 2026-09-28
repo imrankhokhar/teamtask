@@ -328,16 +328,16 @@ async function queryD1(sql, params = []) {
 
 async function flushD1() {
   if (storeMode !== 'd1' || !relationalAdapter || !memoryDb || !remoteDirty) return;
-  remoteDirty = false;
   const data = clone(memoryDb);
   await saveToRelational(relationalAdapter, data);
+  remoteDirty = false;
 }
 
 async function flushSqlite() {
   if (!relationalAdapter || !memoryDb || !remoteDirty) return;
-  remoteDirty = false;
   const data = clone(memoryDb);
   await saveToRelational(relationalAdapter, data);
+  remoteDirty = false;
 }
 
 async function flushRemote() {
@@ -351,7 +351,7 @@ function scheduleRemoteFlush() {
   remoteDirty = true;
   if (remoteFlushTimer) return;
   // D1 free tier counts every deleted/inserted row — debounce hard to avoid burning quota.
-  const delayMs = storeMode === 'd1' ? 8000 : 200;
+  const delayMs = storeMode === 'd1' ? 30000 : 200;
   remoteFlushTimer = setTimeout(() => {
     remoteFlushTimer = null;
     flushRemote().catch((err) => {
