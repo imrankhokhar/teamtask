@@ -29,6 +29,7 @@ const {
   getTaskRecipientIds,
   pushRealtime,
   sendTemplatedEmail,
+  notificationsEnabled,
 } = require('./notify');
 const {
   listTemplatesWithMeta,
@@ -174,6 +175,7 @@ function sameReminderInstant(a, b) {
 let reminderPassRunning = false;
 
 async function processDueReminders() {
+  if (!notificationsEnabled()) return 0;
   if (reminderPassRunning) return 0;
   reminderPassRunning = true;
   try {
@@ -2201,6 +2203,7 @@ if (webRoot) {
 }
 
 // Reminder checker — every 5 minutes (was 15s; that burned D1 free-tier reads/writes)
+// Reminder checker — paused while TEAMTASK_NOTIFICATIONS is off (default)
 cron.schedule('*/5 * * * *', async () => {
   try {
     await processDueReminders();
@@ -2251,6 +2254,11 @@ async function boot() {
     process.exit(1);
   }
   const host = process.env.HOST || process.env.BIND_HOST || '127.0.0.1';
+  if (!notificationsEnabled()) {
+    console.warn(
+      '[Boot] Notifications PAUSED (reminders/push/email/in-app). Set TEAMTASK_NOTIFICATIONS=1 to re-enable.'
+    );
+  }
   server.listen(PORT, host, () => {
     console.log(`TeamTask API running on http://${host}:${PORT}`);
   });

@@ -7,6 +7,15 @@ const {
   actorVars,
 } = require('./templates');
 
+/**
+ * Pause in-app / push / email / reminder notifications to protect D1 free-tier quota.
+ * Default OFF. Set TEAMTASK_NOTIFICATIONS=1 to re-enable.
+ */
+function notificationsEnabled() {
+  const v = String(process.env.TEAMTASK_NOTIFICATIONS ?? '0').trim();
+  return v === '1' || /^true$/i.test(v);
+}
+
 /** @type {Map<string, Set<import('ws').WebSocket>>} */
 const socketsByUser = new Map();
 
@@ -110,6 +119,8 @@ function pushRealtime(userId, payload) {
  * opts.templateKey / opts.emailVars control SMTP email content from Settings → Templates.
  */
 async function notifyTaskUsers(taskId, { type, title, body, excludeUserId, actorUserId, emailVars = {}, templateKey }) {
+  if (!notificationsEnabled()) return [];
+
   // Skip the actor when others will still be notified. If they are the only
   // recipient (solo task / self-test), keep them so shade + in-app still fire.
   const allIds = getTaskRecipientIds(taskId).filter(Boolean);
@@ -219,4 +230,5 @@ module.exports = {
   notifyTaskUsers,
   pushRealtime,
   sendTemplatedEmail,
+  notificationsEnabled,
 };
