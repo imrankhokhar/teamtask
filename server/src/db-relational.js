@@ -5,6 +5,9 @@
 
 const { v4: uuid } = require('uuid');
 
+/** Cap in-app notifications so D1 free-tier boots never SELECT * tens of thousands of rows. */
+const MAX_NOTIFICATIONS_KEPT = 500;
+
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS roles (
     id TEXT PRIMARY KEY,
@@ -312,6 +315,49 @@ async function countUsers(adapter) {
   return Number(row.c || row.count || 0);
 }
 
+function trimNotificationsList(list, keep = MAX_NOTIFICATIONS_KEPT) {
+  const arr = uniqByKey(list || [], (x) => x.id);
+  if (arr.length <= keep) return arr;
+  return [...arr]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, keep);
+}
+
+/**
+ * Drop excess notification rows in D1/SQLite *before* boot SELECT.
+ * Without this, ORDER BY … LIMIT still scans the whole bloated table (rows_read).
+ */
+async function pruneNotificationsTable(adapter, keep = MAX_NOTIFICATIONS_KEPT) {
+  let before = 0;
+  try {
+    const rows = await adapter.query('SELECT COUNT(*) AS c FROM notifications');
+    before = Number(rows[0]?.c || rows[0]?.count || 0);
+  } catch {
+    return { before: 0, deleted: 0 };
+  }
+  if (before <= keep) return { before, deleted: 0 };
+
+  // Spam recovery: if the table is huge, wipe it (notifications are ephemeral UI).
+  // One DELETE of N rows ≈ N writes — far cheaper than re-reading them on every boot.
+  if (before > keep * 4) {
+    await adapter.run('DELETE FROM notifications', []);
+    console.log(
+      `TeamTask: wiped notifications table (${before} rows) — over ${keep * 4} cap; keeping empty until new events`
+    );
+    return { before, deleted: before };
+  }
+
+  const excess = before - keep;
+  await adapter.run(
+    `DELETE FROM notifications WHERE id IN (
+      SELECT id FROM notifications ORDER BY created_at ASC LIMIT ?
+    )`,
+    [excess]
+  );
+  console.log(`TeamTask: pruned notifications ${before} → ${keep} (deleted ${excess})`);
+  return { before, deleted: excess };
+}
+
 async function loadLegacyBlob(adapter, docId) {
   try {
     const rows = await adapter.query('SELECT data FROM appstate WHERE id = ?', [docId]);
@@ -382,7 +428,13 @@ async function loadFromRelational(adapter) {
     createdAt: r.created_at,
   }));
 
-  const notifications = (await adapter.query('SELECT * FROM notifications')).map((r) => ({
+  // Capped load — never pull the whole history into RAM / rows_read.
+  const notifications = (
+    await adapter.query(
+      'SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?',
+      [MAX_NOTIFICATIONS_KEPT]
+    )
+  ).map((r) => ({
     id: r.id,
     userId: r.user_id,
     taskId: r.task_id || null,
@@ -457,7 +509,7 @@ function normalizeDb(db) {
     taskTeamAssignees: uniqByKey(db.taskTeamAssignees, (x) => `${x.taskId}|${x.teamId}`),
     checklistItems: uniqByKey(db.checklistItems, (x) => x.id),
     checklistReplies: uniqByKey(db.checklistReplies, (x) => x.id),
-    notifications: uniqByKey(db.notifications, (x) => x.id),
+    notifications: trimNotificationsList(db.notifications),
     settings: db.settings || {},
     fuelCalHistory: uniqByKey(db.fuelCalHistory, (x) => x.id),
   };
@@ -811,6 +863,23 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
   await ensureSchema(adapter);
   lastPersistedDb = null;
 
+  // Must run before loadFromRelational — otherwise SELECT … LIMIT still scans all rows.
+  try {
+    await pruneNotificationsTable(adapter);
+  } catch (err) {
+    console.warn(
+      'TeamTask: notification prune skipped:',
+      err && err.message ? err.message : err
+    );
+  }
+  try {
+    await adapter.exec(
+      'CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications (created_at)'
+    );
+  } catch {
+    // older backends / permission — capped LIMIT still fine on a pruned table
+  }
+
   let memoryDb;
   let needSave = false;
   const userCount = await countUsers(adapter);
@@ -836,6 +905,10 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
     needSave = true;
   }
 
+  const beforeTrim = (memoryDb.notifications || []).length;
+  memoryDb.notifications = trimNotificationsList(memoryDb.notifications);
+  if (memoryDb.notifications.length < beforeTrim) needSave = true;
+
   if (migrateDb(memoryDb)) {
     needSave = true;
   }
@@ -852,10 +925,13 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
 
 module.exports = {
   SCHEMA,
+  MAX_NOTIFICATIONS_KEPT,
   createSqliteAdapter,
   createD1Adapter,
   createPgAdapter,
   ensureSchema,
+  pruneNotificationsTable,
+  trimNotificationsList,
   loadFromRelational,
   saveToRelational,
   initRelationalStore,

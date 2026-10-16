@@ -1651,7 +1651,8 @@ app.get('/api/notifications', authRequired, (req, res) => {
   const db = readDb();
   const items = db.notifications
     .filter((n) => n.userId === req.user.id)
-    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 100);
   res.json({ notifications: items });
 });
 

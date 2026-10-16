@@ -122,6 +122,25 @@ async function main() {
   const r3 = await saveToRelational(adapter, memory);
   assert.strictEqual(r3.wrote, 0);
 
+  // Notification cap: bloated table is wiped/pruned on init, load stays bounded
+  const { pruneNotificationsTable, MAX_NOTIFICATIONS_KEPT, loadFromRelational } = require('./db-relational');
+  const insert = db.prepare(
+    `INSERT INTO notifications (id, user_id, task_id, type, title, body, read, created_at)
+     VALUES (?, ?, NULL, 't', 'x', 'y', 0, ?)`
+  );
+  for (let i = 0; i < MAX_NOTIFICATIONS_KEPT * 5; i++) {
+    insert.run(`n${i}`, 'u1', `2026-01-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`);
+  }
+  assert.strictEqual(
+    db.prepare('SELECT COUNT(*) AS c FROM notifications').get().c,
+    MAX_NOTIFICATIONS_KEPT * 5
+  );
+  const pruned = await pruneNotificationsTable(adapter);
+  assert.ok(pruned.deleted > 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM notifications').get().c, 0);
+  const loaded = await loadFromRelational(adapter);
+  assert.ok(loaded.notifications.length <= MAX_NOTIFICATIONS_KEPT);
+
   console.log('db-relational.check.js: OK');
 }
 

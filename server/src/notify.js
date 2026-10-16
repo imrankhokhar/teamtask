@@ -1,6 +1,7 @@
 const { readDb, updateDb } = require('./db');
 const { v4: uuid } = require('uuid');
 const { isAdminUser } = require('./permissions');
+const { trimNotificationsList } = require('./db-relational');
 const {
   resolveTemplateKey,
   buildEmailFromTemplate,
@@ -155,6 +156,8 @@ async function notifyTaskUsers(taskId, { type, title, body, excludeUserId, actor
       const user = store.users.find((u) => u.id === userId);
       if (user?.pushToken) pushTokens.push(user.pushToken);
     }
+    // Keep RAM + D1 flush diffs bounded (oldest dropped → DELETE on next flush).
+    store.notifications = trimNotificationsList(store.notifications);
   });
 
   // Send each user only their own notification (not the full recipient list)
