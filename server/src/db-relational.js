@@ -882,14 +882,19 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
 
   let memoryDb;
   let needSave = false;
+  /** True when rows were loaded from existing relational tables (never full-replace those). */
+  let loadedFromRelational = false;
   const userCount = await countUsers(adapter);
   const taskCount = await countTable(adapter, 'tasks');
   const legacy = await loadLegacyBlob(adapter, docId);
 
   if (userCount > 0) {
     memoryDb = await loadFromRelational(adapter);
+    loadedFromRelational = true;
     const merged = mergeLegacyIntoRelational(memoryDb, legacy);
     if (merged.repaired) {
+      // Snapshot pre-repair so save is incremental — never DELETE all tables after a good load.
+      lastPersistedDb = JSON.parse(JSON.stringify(normalizeDb(memoryDb)));
       memoryDb = merged.db;
       needSave = true;
       console.log('TeamTask: repaired relational tables from legacy appstate blob');
@@ -900,9 +905,17 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
     console.log('TeamTask: migrated data from legacy appstate blob to relational tables');
   } else if (taskCount > 0) {
     memoryDb = await loadFromRelational(adapter);
+    loadedFromRelational = true;
   } else {
     memoryDb = createSeededDb();
     needSave = true;
+  }
+
+  // After a successful load, pin lastPersistedDb before any in-memory trim/migrate.
+  // Otherwise saveToRelational treats it as a full replace (DELETE every table + reinsert),
+  // which can wipe D1 if free-tier writes fail mid-batch.
+  if (loadedFromRelational && !lastPersistedDb) {
+    lastPersistedDb = JSON.parse(JSON.stringify(normalizeDb(memoryDb)));
   }
 
   const beforeTrim = (memoryDb.notifications || []).length;
@@ -914,9 +927,15 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
   }
 
   if (needSave) {
-    const result = await saveToRelational(adapter, memoryDb, { force: true });
-    console.log('TeamTask: relational save wrote', result.wrote, 'SQL statements');
-  } else {
+    const force = !loadedFromRelational;
+    const result = await saveToRelational(adapter, memoryDb, { force });
+    console.log(
+      'TeamTask: relational save wrote',
+      result.wrote,
+      'SQL statements',
+      force ? '(full replace)' : '(incremental)'
+    );
+  } else if (!lastPersistedDb) {
     lastPersistedDb = JSON.parse(JSON.stringify(normalizeDb(memoryDb)));
   }
 

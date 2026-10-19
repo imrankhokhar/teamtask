@@ -141,6 +141,16 @@ async function main() {
   const loaded = await loadFromRelational(adapter);
   assert.ok(loaded.notifications.length <= MAX_NOTIFICATIONS_KEPT);
 
+  // Re-init must not wipe users/tasks when notifications were pruned (no full-replace after load).
+  const memory2 = await initRelationalStore(adapter, {
+    docId: 'teamtask-main',
+    createSeededDb: seed,
+    migrateDb: () => false,
+  });
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM users').get().c, 3);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM tasks').get().c, 1);
+  assert.ok(memory2.users.length >= 2);
+
   console.log('db-relational.check.js: OK');
 }
 

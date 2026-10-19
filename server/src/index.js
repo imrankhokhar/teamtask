@@ -1871,10 +1871,22 @@ app.post(
 );
 
 app.get('/api/health', (_req, res) => {
+  let counts = null;
+  try {
+    const db = readDb();
+    counts = {
+      users: (db.users || []).length,
+      tasks: (db.tasks || []).length,
+      notifications: (db.notifications || []).length,
+    };
+  } catch {
+    counts = null;
+  }
   res.json({
     ok: true,
     cloudMode: isCloudDbConfigured(),
     store: getStoreMode(),
+    counts,
     time: new Date().toISOString(),
   });
 });
