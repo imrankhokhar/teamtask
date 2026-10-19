@@ -466,43 +466,23 @@ function FilterDropdown({
   label,
   open,
   onToggle,
-  options,
-  value,
-  onSelect,
   colors,
   styles,
 }: {
   label: string;
   open: boolean;
   onToggle: () => void;
-  options: { key: string; label: string }[];
-  value: string;
-  onSelect: (key: string) => void;
+  options?: { key: string; label: string }[];
+  value?: string;
+  onSelect?: (key: string) => void;
   colors: ThemeColors;
   styles: any;
 }) {
   return (
-    <View style={{ zIndex: open ? 20 : 1 }}>
-      <TouchableOpacity style={styles.filterBtn} onPress={onToggle}>
-        <Text style={styles.filterText}>{label}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.text} />
-      </TouchableOpacity>
-      {open ? (
-        <View style={[styles.filterMenu, styles.filterMenuAbsolute]}>
-          {options.map((p) => (
-            <TouchableOpacity
-              key={p.key}
-              style={[styles.filterItem, value === p.key && styles.filterItemOn]}
-              onPress={() => onSelect(p.key)}
-            >
-              <Text style={[styles.filterItemText, value === p.key && styles.filterItemTextOn]}>
-                {p.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
-    </View>
+    <TouchableOpacity style={styles.filterBtn} onPress={onToggle}>
+      <Text style={styles.filterText}>{label}</Text>
+      <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.text} />
+    </TouchableOpacity>
   );
 }
 
@@ -573,7 +553,7 @@ export default function DashboardScreen({ navigation }: any) {
           />
         </View>
 
-        <View style={[styles.section, { overflow: 'visible', zIndex: 5 }]}>
+        <View style={[styles.section, styles.sectionTasks]}>
           <View style={styles.sectionHead}>
             <Text style={styles.sectionTitle}>Tasks</Text>
             <View style={styles.filtersRow}>
@@ -583,12 +563,6 @@ export default function DashboardScreen({ navigation }: any) {
                 onToggle={() => {
                   setPeriodOpen((v) => !v);
                   setChartOpen(false);
-                }}
-                options={PERIODS}
-                value={period}
-                onSelect={(key) => {
-                  setPeriod(key);
-                  setPeriodOpen(false);
                 }}
                 colors={colors}
                 styles={styles}
@@ -600,17 +574,56 @@ export default function DashboardScreen({ navigation }: any) {
                   setChartOpen((v) => !v);
                   setPeriodOpen(false);
                 }}
-                options={CHART_TYPES}
-                value={chartType}
-                onSelect={(key) => {
-                  setChartType(key as ChartType);
-                  setChartOpen(false);
-                }}
                 colors={colors}
                 styles={styles}
               />
             </View>
           </View>
+
+          {/* In-flow menus so they always sit above the chart (never under it). */}
+          {periodOpen ? (
+            <View style={styles.filterMenu}>
+              {PERIODS.map((p) => (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[styles.filterItem, period === p.key && styles.filterItemOn]}
+                  onPress={() => {
+                    setPeriod(p.key);
+                    setPeriodOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[styles.filterItemText, period === p.key && styles.filterItemTextOn]}
+                  >
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          {chartOpen ? (
+            <View style={styles.filterMenu}>
+              {CHART_TYPES.map((p) => (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[styles.filterItem, chartType === p.key && styles.filterItemOn]}
+                  onPress={() => {
+                    setChartType(p.key);
+                    setChartOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.filterItemText,
+                      chartType === p.key && styles.filterItemTextOn,
+                    ]}
+                  >
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
 
           {loading ? (
             <ActivityIndicator color={colors.accent} style={{ marginVertical: 24 }} />
@@ -761,14 +774,30 @@ function makeStyles(colors: ThemeColors) {
       padding: 16,
       gap: 10,
     },
+    sectionTasks: {
+      overflow: 'visible',
+      zIndex: 20,
+      elevation: 20,
+    },
     sectionHead: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
       flexWrap: 'wrap',
+      zIndex: 100,
+      elevation: 100,
+      position: 'relative',
     },
-    filtersRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' },
+    filtersRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      alignItems: 'flex-start',
+      zIndex: 100,
+      elevation: 100,
+      position: 'relative',
+    },
     sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
     sectionHint: { color: colors.textMuted, fontSize: 13, marginTop: -4 },
     subLabel: {
@@ -795,19 +824,9 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 10,
       overflow: 'hidden',
       backgroundColor: colors.bgElevated,
-      marginTop: 4,
-      minWidth: 140,
-    },
-    filterMenuAbsolute: {
-      position: 'absolute',
-      top: 38,
-      right: 0,
-      zIndex: 50,
-      elevation: 8,
-      shadowColor: '#000',
-      shadowOpacity: 0.15,
-      shadowRadius: 8,
-      shadowOffset: { width: 0, height: 4 },
+      width: '100%',
+      maxWidth: 320,
+      alignSelf: 'flex-end',
     },
     filterItem: { paddingHorizontal: 12, paddingVertical: 10 },
     filterItemOn: { backgroundColor: colors.accent + '22' },
@@ -821,6 +840,9 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.bgElevated,
       overflow: 'hidden',
       paddingHorizontal: 4,
+      zIndex: 0,
+      elevation: 0,
+      position: 'relative',
     },
     legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '48%' },
