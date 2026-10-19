@@ -498,18 +498,37 @@ async function initFileStore() {
 
 /**
  * Call once before accepting traffic.
- * Priority: TEAMTASK_SQLITE → Cloudflare D1 (falls back to SQLite on quota errors) →
- * DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
+ * Priority: Cloudflare D1 (falls back to SQLite on quota errors) →
+ * TEAMTASK_SQLITE → DATABASE_URL (Postgres) → MONGODB_URI → local JSON file.
+ *
+ * D1 must win over TEAMTASK_SQLITE when both are set — otherwise a leftover
+ * TEAMTASK_SQLITE=1 from .env.example serves an empty local file while real
+ * data sits unused in Cloudflare.
+ *
+ * To force local SQLite even when D1 is configured: TEAMTASK_FORCE_SQLITE=1
  * In development, unreachable cloud DB falls back to local file unless
  * TEAMTASK_DB_FALLBACK=none.
  */
 async function initDb() {
-  // Local SQLite wins when explicitly enabled — useful when D1 free-tier quota is exhausted.
+  const forceSqlite = /^(1|true|yes)$/i.test(
+    String(process.env.TEAMTASK_FORCE_SQLITE || '').trim()
+  );
   const sqlitePath = getSqlitePath();
-  if (sqlitePath) return initSqlite(sqlitePath);
-
   const d1Config = getD1Config();
+
+  if (sqlitePath && forceSqlite) {
+    console.warn(
+      'TeamTask: TEAMTASK_FORCE_SQLITE=1 — using SQLite and ignoring Cloudflare D1'
+    );
+    return initSqlite(sqlitePath);
+  }
+
   if (d1Config) {
+    if (sqlitePath) {
+      console.warn(
+        'TeamTask: CLOUDFLARE D1 is configured — using D1 (ignoring TEAMTASK_SQLITE). Set TEAMTASK_FORCE_SQLITE=1 to override.'
+      );
+    }
     try {
       return await initD1(d1Config);
     } catch (err) {
@@ -520,17 +539,19 @@ async function initDb() {
       const msg = formatDbError(err);
       // Free-tier read/write caps — keep the site up on local SQLite until midnight UTC.
       if (/exceeded|row read|rows_written|free tier|10100|too many/i.test(msg)) {
-        const fallbackPath = path.join(DATA_DIR, 'teamtask.sqlite');
+        const fallbackPath = sqlitePath || path.join(DATA_DIR, 'teamtask.sqlite');
         console.warn(
           'D1 quota exceeded — falling back to SQLite at',
           fallbackPath,
-          '(set TEAMTASK_SQLITE=1 and comment CLOUDFLARE_* to skip D1 until the limit resets)'
+          '(fix D1 or wait for daily reset; set TEAMTASK_FORCE_SQLITE=1 to skip D1)'
         );
         return initSqlite(fallbackPath);
       }
       throw err;
     }
   }
+
+  if (sqlitePath) return initSqlite(sqlitePath);
 
   const pgUri = getPostgresUri();
   if (pgUri) {
