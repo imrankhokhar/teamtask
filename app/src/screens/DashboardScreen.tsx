@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState, createElement } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Platform,
   useWindowDimensions,
+  LayoutChangeEvent,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { api, getApiBaseUrlSyncFallback } from '../api';
@@ -43,48 +44,72 @@ type Series = {
   values: (number | null)[];
 };
 
+function LineSegment({
+  x1,
+  y1,
+  x2,
+  y2,
+  color,
+}: {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color: string;
+}) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const length = Math.sqrt(dx * dx + dy * dy);
+  if (length < 0.5) return null;
+  const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: (x1 + x2) / 2 - length / 2,
+        top: (y1 + y2) / 2 - 1.25,
+        width: length,
+        height: 2.5,
+        backgroundColor: color,
+        borderRadius: 2,
+        transform: [{ rotate: `${angle}deg` }],
+      }}
+    />
+  );
+}
+
 function TaskLineChart({
   labels,
   series,
   yMax,
-  width,
   colors,
 }: {
   labels: string[];
   series: Series[];
   yMax: number;
-  width: number;
   colors: ThemeColors;
 }) {
-  const height = 200;
-  const padL = 28;
-  const padR = 12;
-  const padT = 12;
-  const padB = 28;
-  const w = Math.max(280, width);
-  const innerW = w - padL - padR;
+  const [boxW, setBoxW] = useState(320);
+  const height = 220;
+  const padL = 32;
+  const padR = 14;
+  const padT = 16;
+  const padB = 32;
+  const innerW = Math.max(40, boxW - padL - padR);
   const innerH = height - padT - padB;
   const n = Math.max(1, labels.length - 1);
   const maxY = Math.max(1, yMax || 5);
 
-  const xAt = (i: number) => padL + (labels.length <= 1 ? innerW / 2 : (i / n) * innerW);
-  const yAt = (v: number) => padT + innerH - (v / maxY) * innerH;
+  const xAt = (i: number) =>
+    padL + (labels.length <= 1 ? innerW / 2 : (i / n) * innerW);
+  const yAt = (v: number) => padT + innerH - (Math.max(0, v) / maxY) * innerH;
 
-  const grid = [1, 2, 3, 4, 5].map((v) => ({
-    v,
-    y: yAt(v),
-  }));
+  const onLayout = (e: LayoutChangeEvent) => {
+    const w = e.nativeEvent.layout.width;
+    if (w > 40 && Math.abs(w - boxW) > 1) setBoxW(w);
+  };
 
-  const polylines = series.map((s) => {
-    const pts: string[] = [];
-    s.values.forEach((v, i) => {
-      if (v == null) return;
-      pts.push(`${xAt(i)},${yAt(v)}`);
-    });
-    return { ...s, points: pts.join(' ') };
-  });
-
-  // Label ticks: first, middle, last
   const tickIdx = Array.from(
     new Set(
       [0, Math.floor(labels.length / 2), labels.length - 1].filter(
@@ -93,96 +118,98 @@ function TaskLineChart({
     )
   );
 
-  if (Platform.OS === 'web') {
-    return createElement(
-      'svg',
-      {
-        width: w,
-        height,
-        viewBox: `0 0 ${w} ${height}`,
-        style: { maxWidth: '100%', display: 'block' },
-      },
-      ...grid.map((g) =>
-        createElement('line', {
-          key: `g${g.v}`,
-          x1: padL,
-          x2: w - padR,
-          y1: g.y,
-          y2: g.y,
-          stroke: colors.border,
-          strokeWidth: 1,
-          strokeDasharray: '4 4',
-        })
-      ),
-      createElement('line', {
-        x1: padL,
-        y1: padT,
-        x2: padL,
-        y2: height - padB,
-        stroke: colors.border,
-        strokeWidth: 1,
-      }),
-      createElement('line', {
-        x1: padL,
-        y1: height - padB,
-        x2: w - padR,
-        y2: height - padB,
-        stroke: colors.border,
-        strokeWidth: 1,
-      }),
-      ...polylines.map((s) =>
-        s.points
-          ? createElement('polyline', {
-              key: s.id,
-              fill: 'none',
-              stroke: s.color,
-              strokeWidth: 2.5,
-              strokeLinejoin: 'round',
-              strokeLinecap: 'round',
-              points: s.points,
-            })
-          : null
-      ),
-      ...series.flatMap((s) =>
-        s.values.map((v, i) =>
-          v == null
-            ? null
-            : createElement('circle', {
-                key: `${s.id}-${i}`,
-                cx: xAt(i),
-                cy: yAt(v),
-                r: 3.5,
-                fill: s.color,
-              })
-        )
-      ),
-      ...tickIdx.map((i) =>
-        createElement(
-          'text',
-          {
-            key: `t${i}`,
-            x: xAt(i),
-            y: height - 8,
-            fill: colors.textMuted,
-            fontSize: 10,
-            textAnchor: 'middle',
-          },
-          labels[i]
-        )
-      )
-    );
-  }
-
-  // Native fallback: colored dots in rows
   return (
-    <View style={{ gap: 8, paddingVertical: 8 }}>
-      {series.map((s) => (
-        <View key={s.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: s.color }} />
-          <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
-            {s.title}
-          </Text>
-        </View>
+    <View style={{ width: '100%', height }} onLayout={onLayout}>
+      {/* grid */}
+      {[1, 2, 3, 4, 5].map((v) => (
+        <View
+          key={`g${v}`}
+          style={{
+            position: 'absolute',
+            left: padL,
+            right: padR,
+            top: yAt(v),
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: colors.border,
+          }}
+        />
+      ))}
+      {/* axes */}
+      <View
+        style={{
+          position: 'absolute',
+          left: padL,
+          top: padT,
+          width: StyleSheet.hairlineWidth,
+          height: innerH,
+          backgroundColor: colors.border,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: padL,
+          top: height - padB,
+          width: innerW,
+          height: StyleSheet.hairlineWidth,
+          backgroundColor: colors.border,
+        }}
+      />
+
+      {series.map((s) => {
+        const pts = s.values.map((v, i) => ({
+          i,
+          v: v == null ? 0 : Number(v),
+          x: xAt(i),
+          y: yAt(v == null ? 0 : Number(v)),
+        }));
+        return (
+          <View key={s.id} pointerEvents="none" style={StyleSheet.absoluteFill}>
+            {pts.slice(0, -1).map((p, i) => (
+              <LineSegment
+                key={`${s.id}-seg-${i}`}
+                x1={p.x}
+                y1={p.y}
+                x2={pts[i + 1].x}
+                y2={pts[i + 1].y}
+                color={s.color}
+              />
+            ))}
+            {pts.map((p) => (
+              <View
+                key={`${s.id}-dot-${p.i}`}
+                style={{
+                  position: 'absolute',
+                  left: p.x - 4,
+                  top: p.y - 4,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: s.color,
+                  borderWidth: 1.5,
+                  borderColor: colors.bgCard,
+                }}
+              />
+            ))}
+          </View>
+        );
+      })}
+
+      {tickIdx.map((i) => (
+        <Text
+          key={`tick-${i}`}
+          style={{
+            position: 'absolute',
+            left: xAt(i) - 20,
+            top: height - 22,
+            width: 40,
+            textAlign: 'center',
+            color: colors.textMuted,
+            fontSize: 10,
+          }}
+        >
+          {labels[i]}
+        </Text>
       ))}
     </View>
   );
@@ -190,7 +217,6 @@ function TaskLineChart({
 
 export default function DashboardScreen({ navigation }: any) {
   const { colors } = useTheme();
-  const { width: winW } = useWindowDimensions();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [period, setPeriod] = useState('this_week');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -221,7 +247,7 @@ export default function DashboardScreen({ navigation }: any) {
   const chartSeries: Series[] = data?.chart?.series || [];
   const announcements = data?.announcements || [];
   const periodLabel = PERIODS.find((p) => p.key === period)?.label || 'This week';
-  const chartWidth = Math.min(640, Math.max(280, winW - 64));
+  const hasChart = chartSeries.length > 0 && chartLabels.length > 0;
 
   return (
     <AppShell navigation={navigation} active="Dashboard" title="Dashboard">
@@ -295,15 +321,18 @@ export default function DashboardScreen({ navigation }: any) {
           ) : (
             <>
               <Text style={styles.subLabel}>Activity (last 5 tasks)</Text>
-              <View style={styles.chartWrap}>
-                <TaskLineChart
-                  labels={chartLabels}
-                  series={chartSeries}
-                  yMax={data?.chart?.yMax || 5}
-                  width={chartWidth}
-                  colors={colors}
-                />
-              </View>
+              {hasChart ? (
+                <View style={styles.chartWrap}>
+                  <TaskLineChart
+                    labels={chartLabels}
+                    series={chartSeries}
+                    yMax={data?.chart?.yMax || 5}
+                    colors={colors}
+                  />
+                </View>
+              ) : (
+                <Text style={styles.empty}>Chart data unavailable.</Text>
+              )}
               <View style={styles.legend}>
                 {chartSeries.map((s) => (
                   <View key={s.id} style={styles.legendItem}>
@@ -431,7 +460,12 @@ function makeStyles(colors: ThemeColors) {
     },
     sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
     sectionHint: { color: colors.textMuted, fontSize: 13, marginTop: -4 },
-    subLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
+    subLabel: {
+      color: colors.textMuted,
+      fontSize: 12,
+      fontWeight: '700',
+      textTransform: 'uppercase',
+    },
     filterBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -456,7 +490,14 @@ function makeStyles(colors: ThemeColors) {
     filterItemText: { color: colors.text, fontWeight: '600' },
     filterItemTextOn: { color: colors.accent, fontWeight: '800' },
     empty: { color: colors.textMuted, fontSize: 14, paddingVertical: 8 },
-    chartWrap: { overflow: 'hidden', borderRadius: 8 },
+    chartWrap: {
+      width: '100%',
+      minHeight: 220,
+      borderRadius: 8,
+      backgroundColor: colors.bgElevated,
+      overflow: 'hidden',
+      paddingHorizontal: 4,
+    },
     legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '48%' },
     legendDot: { width: 10, height: 10, borderRadius: 5 },

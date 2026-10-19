@@ -2047,7 +2047,17 @@ function eachDay(start, end) {
 app.get('/api/dashboard', authRequired, (req, res) => {
   const db = readDb();
   const period = String(req.query.period || 'this_week');
-  const { start, end } = periodBounds(period);
+  let { start, end } = periodBounds(period);
+  // Line charts need ≥2 X points; expand short ranges (e.g. "today") to 7 days.
+  let days = eachDay(start, end);
+  if (days.length < 2) {
+    const expandedStart = new Date(end);
+    expandedStart.setHours(0, 0, 0, 0);
+    expandedStart.setDate(expandedStart.getDate() - 6);
+    start = expandedStart;
+    days = eachDay(start, end);
+  }
+
   const visible = getVisibleTasksForUser(db, req.user.id);
   const recentTasks = visible.slice(0, 5).map((t) => ({
     id: t.id,
@@ -2057,16 +2067,13 @@ app.get('/api/dashboard', authRequired, (req, res) => {
     createdAt: t.createdAt,
   }));
 
-  const days = eachDay(start, end);
-  const labels = days.map((d) =>
-    `${d.getMonth() + 1}/${d.getDate()}`
-  );
+  const labels = days.map((d) => `${d.getMonth() + 1}/${d.getDate()}`);
   const palette = ['#3B82F6', '#22C55E', '#F59E0B', '#EF4444', '#A855F7'];
   const series = recentTasks.map((t, i) => {
-    const created = new Date(t.createdAt || t.updatedAt || 0);
-    created.setHours(0, 0, 0, 0);
+    const createdMs = new Date(t.createdAt || t.updatedAt || 0).setHours(0, 0, 0, 0);
     const score = statusScore(t.status);
-    const values = days.map((d) => (d >= created ? score : null));
+    // Always emit numbers so polylines are continuous (0 before the task existed).
+    const values = days.map((d) => (d.getTime() >= createdMs ? score : 0));
     return {
       id: t.id,
       title: t.title,
