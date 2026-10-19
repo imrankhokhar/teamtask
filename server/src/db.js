@@ -628,6 +628,10 @@ async function closeDb() {
   storeMode = null;
 }
 
+function getStoreMode() {
+  return storeMode;
+}
+
 module.exports = {
   initDb,
   closeDb,
@@ -635,6 +639,7 @@ module.exports = {
   writeDb,
   updateDb,
   isCloudDbConfigured,
+  getStoreMode,
   getPostgresUri,
   getSqlitePath,
   getD1Config,

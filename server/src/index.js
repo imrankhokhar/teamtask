@@ -13,7 +13,7 @@ const { WebSocketServer } = require('ws');
 const { v4: uuid } = require('uuid');
 const jwt = require('jsonwebtoken');
 
-const { readDb, updateDb, initDb, isCloudDbConfigured } = require('./db');
+const { readDb, updateDb, initDb, isCloudDbConfigured, getStoreMode } = require('./db');
 const { signToken, authRequired, adminRequired, requirePerm, JWT_SECRET } = require('./auth');
 const {
   MODULES,
@@ -1874,6 +1874,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     cloudMode: isCloudDbConfigured(),
+    store: getStoreMode(),
     time: new Date().toISOString(),
   });
 });
