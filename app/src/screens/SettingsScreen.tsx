@@ -116,7 +116,7 @@ export default function SettingsScreen({ navigation }: any) {
   });
 
   async function toggleNotifications(next: boolean) {
-    if (!isAdmin) return;
+    if (!isAdmin && !can('settings.edit')) return;
     try {
       setNotifyBusy(true);
       setNotifyMsg('');
@@ -292,12 +292,12 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         </View>
 
-        {isAdmin ? (
+        {isAdmin || can('settings.edit') ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Notifications</Text>
             <Text style={styles.sectionHint}>
-              When off, the app stops reminders, push, email, and in-app notification delivery
-              (protects D1 quota). Turn on only when you need them.
+              Admin control: when off, the app stops reminders, push, email, and in-app notification
+              delivery (protects D1 quota). Turn on only when you need them.
             </Text>
             <View style={styles.toggleRow}>
               <View style={{ flex: 1 }}>

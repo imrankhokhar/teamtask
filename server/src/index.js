@@ -1957,18 +1957,23 @@ app.post('/api/ops/resume', authRequired, adminRequired, (req, res) => {
   res.json({ ok: true, ops });
 });
 
-app.patch('/api/settings/notifications', authRequired, adminRequired, (req, res) => {
-  const enabled = coerceBool(req.body?.enabled, false);
-  updateDb((db) => {
-    db.settings = normalizeSettings(db.settings);
-    db.settings.notificationsEnabled = enabled;
-  });
-  res.json({
-    ok: true,
-    settings: normalizeSettings(readDb().settings),
-    notificationsEnabled: enabled,
-  });
-});
+app.patch(
+  '/api/settings/notifications',
+  authRequired,
+  requirePerm('settings.edit'),
+  (req, res) => {
+    const enabled = coerceBool(req.body?.enabled, false);
+    updateDb((db) => {
+      db.settings = normalizeSettings(db.settings);
+      db.settings.notificationsEnabled = enabled;
+    });
+    res.json({
+      ok: true,
+      settings: normalizeSettings(readDb().settings),
+      notificationsEnabled: enabled,
+    });
+  }
+);
 
 // ---------- Free SMTP email settings ----------
 app.get('/api/smtp', authRequired, requirePerm('settings.view'), (req, res) => {
