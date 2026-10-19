@@ -16,6 +16,7 @@ const {
 const {
   loadFromDisk: loadOpsLimitFromDisk,
   reportDbError,
+  recordD1Usage,
 } = require('./ops-limit');
 
 function resolveDataDir() {
@@ -330,7 +331,20 @@ async function queryD1(sql, params = []) {
     reportDbError(err);
     throw err;
   }
-  const first = body.result?.[0];
+  const batches = Array.isArray(body.result) ? body.result : [];
+  let rowsRead = 0;
+  let rowsWritten = 0;
+  let sizeAfter;
+  for (const batch of batches) {
+    const meta = batch?.meta || {};
+    rowsRead += Number(meta.rows_read) || 0;
+    rowsWritten += Number(meta.rows_written) || 0;
+    if (meta.size_after != null) sizeAfter = Number(meta.size_after);
+  }
+  if (rowsRead || rowsWritten || sizeAfter != null) {
+    recordD1Usage({ rowsRead, rowsWritten, sizeAfter });
+  }
+  const first = batches[0];
   return first?.results || [];
 }
 

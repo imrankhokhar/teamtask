@@ -11,11 +11,16 @@ type OpsStatus = {
   kindLabel?: string | null;
   message?: string | null;
   at?: string | null;
+  usage?: {
+    rowsRead?: number;
+    rowsWritten?: number;
+    storageBytes?: number;
+  };
 };
 
 /**
- * Admins: when D1 free-tier limit is hit, show a confirm modal.
- * Confirm pauses all write operations until admin resumes (after daily reset).
+ * Admins: soft-stop at 90% of D1 free-tier (4.5M reads / 90k writes / 4.5 GB).
+ * Ops auto-pause; banner lets admin resume after midnight UTC (or after freeing storage).
  */
 export default function QuotaLimitModal() {
   const { user, isAdmin, token } = useAuth();
@@ -70,25 +75,28 @@ export default function QuotaLimitModal() {
 
   if (!isAdmin || !ops) return null;
 
+  // Soft-stop auto-pauses; modal only if alert fired without pause yet.
   const showConfirmModal = Boolean(ops.quotaHit && !ops.opsPaused);
   const showPausedBanner = Boolean(ops.opsPaused);
+  const usageHint = ops.usage
+    ? `Today: ${(ops.usage.rowsRead || 0).toLocaleString()} reads · ${(ops.usage.rowsWritten || 0).toLocaleString()} writes`
+    : null;
 
   return (
     <>
       <Modal visible={showConfirmModal} transparent animationType="fade">
         <View style={styles.backdrop}>
           <View style={styles.card}>
-            <Text style={styles.title}>App data limit reached</Text>
+            <Text style={styles.title}>App data safety limit</Text>
             <Text style={styles.message}>
               {ops.message ||
-                'Cloudflare D1 free-tier limit reached (rows read 5M / rows written 100k / storage 5 GB). Please stop today\'s operations.'}
+                'Usage reached 90% of the D1 free tier (4.5M reads / 90k writes / 4.5 GB). Stop today\'s operations.'}
             </Text>
-            {ops.kindLabel ? (
-              <Text style={styles.meta}>Limit: {ops.kindLabel}</Text>
-            ) : null}
+            {ops.kindLabel ? <Text style={styles.meta}>Limit: {ops.kindLabel}</Text> : null}
+            {usageHint ? <Text style={styles.meta}>{usageHint}</Text> : null}
             <Text style={styles.meta}>
-              Confirm to stop all create/update/delete operations until the daily limit resets
-              (midnight UTC), then use Resume in Settings.
+              Confirm to stop all create/update/delete operations. Resume after midnight UTC (or
+              after freeing storage).
             </Text>
             <TouchableOpacity
               style={styles.confirmBtn}
@@ -109,7 +117,8 @@ export default function QuotaLimitModal() {
         <View style={styles.banner} pointerEvents="box-none">
           <View style={styles.bannerInner}>
             <Text style={styles.bannerText}>
-              Operations paused — data limit. Resume after midnight UTC reset.
+              {ops.message ||
+                'Operations paused — D1 safety limit (4.5M reads / 90k writes / 4.5 GB).'}
             </Text>
             <TouchableOpacity style={styles.resumeBtn} onPress={onResume} disabled={busy}>
               {busy ? (

@@ -1950,6 +1950,9 @@ app.post('/api/ops/confirm-pause', authRequired, adminRequired, (req, res) => {
 
 app.post('/api/ops/resume', authRequired, adminRequired, (req, res) => {
   const ops = resumeOps();
+  if (ops.error) {
+    return res.status(409).json({ error: ops.error, ops });
+  }
   console.warn('[ops-limit] Admin resumed operations');
   res.json({ ok: true, ops });
 });
