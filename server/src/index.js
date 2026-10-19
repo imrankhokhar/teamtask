@@ -2047,6 +2047,7 @@ function eachDay(start, end) {
 app.get('/api/dashboard', authRequired, (req, res) => {
   const db = readDb();
   const period = String(req.query.period || 'this_week');
+  const statusFilter = String(req.query.status || 'all').toLowerCase().trim();
   let { start, end } = periodBounds(period);
   // Line charts need ≥2 X points; expand short ranges (e.g. "today") to 7 days.
   let days = eachDay(start, end);
@@ -2059,7 +2060,21 @@ app.get('/api/dashboard', authRequired, (req, res) => {
   }
 
   const visible = getVisibleTasksForUser(db, req.user.id);
-  const recentTasks = visible.slice(0, 5).map((t) => ({
+  const allowedStatuses = new Set([
+    'ongoing',
+    'ready',
+    'in_progress',
+    'pending',
+    'completed',
+    'reopen',
+  ]);
+  const byStatus =
+    statusFilter === 'all' || !allowedStatuses.has(statusFilter)
+      ? visible
+      : visible.filter((t) => String(t.status || '').toLowerCase() === statusFilter);
+
+  // Latest 5 tasks for the selected status (still sorted by updatedAt from getVisibleTasksForUser).
+  const recentTasks = byStatus.slice(0, 5).map((t) => ({
     id: t.id,
     title: t.title,
     status: t.status,
@@ -2093,6 +2108,7 @@ app.get('/api/dashboard', authRequired, (req, res) => {
       users: (db.users || []).length,
     },
     period,
+    status: statusFilter === 'all' || !allowedStatuses.has(statusFilter) ? 'all' : statusFilter,
     recentTasks,
     chart: {
       labels,

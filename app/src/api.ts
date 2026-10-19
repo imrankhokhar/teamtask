@@ -214,8 +214,10 @@ export const api = {
   resumeOps: () => request('/api/ops/resume', { method: 'POST' }),
   setNotificationsEnabled: (enabled: boolean) =>
     request('/api/settings/notifications', { method: 'PATCH', body: { enabled } }),
-  dashboard: (period?: string) =>
-    request(`/api/dashboard?period=${encodeURIComponent(period || 'this_week')}`),
+  dashboard: (period?: string, status?: string) =>
+    request(
+      `/api/dashboard?period=${encodeURIComponent(period || 'this_week')}&status=${encodeURIComponent(status || 'all')}`
+    ),
   announcements: () => request('/api/announcements'),
   createAnnouncement: async (opts: {
     title: string;

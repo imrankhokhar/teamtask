@@ -25,6 +25,16 @@ const PERIODS: { key: string; label: string }[] = [
   { key: 'last_month', label: 'Last month' },
 ];
 
+const STATUS_FILTERS: { key: string; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'ongoing', label: 'Ongoing' },
+  { key: 'ready', label: 'Ready' },
+  { key: 'in_progress', label: 'In progress' },
+  { key: 'pending', label: 'Pending' },
+  { key: 'completed', label: 'Completed' },
+  { key: 'reopen', label: 'Reopen' },
+];
+
 const CHART_TYPES: { key: ChartType; label: string }[] = [
   { key: 'line', label: 'Line chart' },
   { key: 'bar', label: 'Bar chart' },
@@ -490,8 +500,10 @@ export default function DashboardScreen({ navigation }: any) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [period, setPeriod] = useState('this_week');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [chartType, setChartType] = useState<ChartType>('line');
   const [periodOpen, setPeriodOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
@@ -501,14 +513,14 @@ export default function DashboardScreen({ navigation }: any) {
     try {
       setLoading(true);
       setErr('');
-      const res = await api.dashboard(period);
+      const res = await api.dashboard(period, statusFilter);
       setData(res);
     } catch (e: any) {
       setErr(e.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
-  }, [period]);
+  }, [period, statusFilter]);
 
   useEffect(() => {
     load();
@@ -520,6 +532,8 @@ export default function DashboardScreen({ navigation }: any) {
   const chartSeries: Series[] = data?.chart?.series || [];
   const announcements = data?.announcements || [];
   const periodLabel = PERIODS.find((p) => p.key === period)?.label || 'This week';
+  const statusLabelUi =
+    STATUS_FILTERS.find((s) => s.key === statusFilter)?.label || 'All';
   const chartLabel = CHART_TYPES.find((c) => c.key === chartType)?.label || 'Line chart';
   const hasChart = chartSeries.length > 0;
   const yMax = data?.chart?.yMax || 5;
@@ -562,6 +576,18 @@ export default function DashboardScreen({ navigation }: any) {
                 open={periodOpen}
                 onToggle={() => {
                   setPeriodOpen((v) => !v);
+                  setStatusOpen(false);
+                  setChartOpen(false);
+                }}
+                colors={colors}
+                styles={styles}
+              />
+              <FilterDropdown
+                label={statusLabelUi}
+                open={statusOpen}
+                onToggle={() => {
+                  setStatusOpen((v) => !v);
+                  setPeriodOpen(false);
                   setChartOpen(false);
                 }}
                 colors={colors}
@@ -573,6 +599,7 @@ export default function DashboardScreen({ navigation }: any) {
                 onToggle={() => {
                   setChartOpen((v) => !v);
                   setPeriodOpen(false);
+                  setStatusOpen(false);
                 }}
                 colors={colors}
                 styles={styles}
@@ -594,6 +621,29 @@ export default function DashboardScreen({ navigation }: any) {
                 >
                   <Text
                     style={[styles.filterItemText, period === p.key && styles.filterItemTextOn]}
+                  >
+                    {p.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+          {statusOpen ? (
+            <View style={styles.filterMenu}>
+              {STATUS_FILTERS.map((p) => (
+                <TouchableOpacity
+                  key={p.key}
+                  style={[styles.filterItem, statusFilter === p.key && styles.filterItemOn]}
+                  onPress={() => {
+                    setStatusFilter(p.key);
+                    setStatusOpen(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.filterItemText,
+                      statusFilter === p.key && styles.filterItemTextOn,
+                    ]}
                   >
                     {p.label}
                   </Text>
@@ -628,7 +678,11 @@ export default function DashboardScreen({ navigation }: any) {
           {loading ? (
             <ActivityIndicator color={colors.accent} style={{ marginVertical: 24 }} />
           ) : recentTasks.length === 0 ? (
-            <Text style={styles.empty}>No tasks yet.</Text>
+            <Text style={styles.empty}>
+              {statusFilter === 'all'
+                ? 'No tasks yet.'
+                : `No ${statusLabelUi.toLowerCase()} tasks.`}
+            </Text>
           ) : (
             <>
               <Text style={styles.subLabel}>Activity (last 5 tasks)</Text>
