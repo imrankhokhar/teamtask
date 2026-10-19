@@ -8,13 +8,14 @@ import {
   Image,
   ActivityIndicator,
   Platform,
-  useWindowDimensions,
   LayoutChangeEvent,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { api, getApiBaseUrlSyncFallback } from '../api';
 import { useTheme, ThemeColors } from '../theme';
 import AppShell from '../components/AppShell';
+
+type ChartType = 'line' | 'bar' | 'pie' | 'donut' | 'radar';
 
 const PERIODS: { key: string; label: string }[] = [
   { key: 'today', label: 'Today' },
@@ -23,6 +24,22 @@ const PERIODS: { key: string; label: string }[] = [
   { key: 'this_month', label: 'This month' },
   { key: 'last_month', label: 'Last month' },
 ];
+
+const CHART_TYPES: { key: ChartType; label: string }[] = [
+  { key: 'line', label: 'Line chart' },
+  { key: 'bar', label: 'Bar chart' },
+  { key: 'pie', label: 'Pie chart' },
+  { key: 'donut', label: 'Donut chart' },
+  { key: 'radar', label: 'Radar chart' },
+];
+
+type Series = {
+  id: string;
+  title: string;
+  status: string;
+  color: string;
+  values: (number | null)[];
+};
 
 function resolveUrl(path?: string | null) {
   if (!path) return null;
@@ -36,13 +53,11 @@ function statusLabel(s: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type Series = {
-  id: string;
-  title: string;
-  status: string;
-  color: string;
-  values: (number | null)[];
-};
+function lastValue(s: Series) {
+  const vals = (s.values || []).map((v) => (v == null ? 0 : Number(v)));
+  if (!vals.length) return 1;
+  return Math.max(0.1, vals[vals.length - 1] || 1);
+}
 
 function LineSegment({
   x1,
@@ -50,12 +65,14 @@ function LineSegment({
   x2,
   y2,
   color,
+  thickness = 2.5,
 }: {
   x1: number;
   y1: number;
   x2: number;
   y2: number;
   color: string;
+  thickness?: number;
 }) {
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -68,9 +85,9 @@ function LineSegment({
       style={{
         position: 'absolute',
         left: (x1 + x2) / 2 - length / 2,
-        top: (y1 + y2) / 2 - 1.25,
+        top: (y1 + y2) / 2 - thickness / 2,
         width: length,
-        height: 2.5,
+        height: thickness,
         backgroundColor: color,
         borderRadius: 2,
         transform: [{ rotate: `${angle}deg` }],
@@ -120,7 +137,6 @@ function TaskLineChart({
 
   return (
     <View style={{ width: '100%', height }} onLayout={onLayout}>
-      {/* grid */}
       {[1, 2, 3, 4, 5].map((v) => (
         <View
           key={`g${v}`}
@@ -134,7 +150,6 @@ function TaskLineChart({
           }}
         />
       ))}
-      {/* axes */}
       <View
         style={{
           position: 'absolute',
@@ -159,7 +174,6 @@ function TaskLineChart({
       {series.map((s) => {
         const pts = s.values.map((v, i) => ({
           i,
-          v: v == null ? 0 : Number(v),
           x: xAt(i),
           y: yAt(v == null ? 0 : Number(v)),
         }));
@@ -215,11 +229,290 @@ function TaskLineChart({
   );
 }
 
+function TaskBarChart({ series, yMax, colors }: { series: Series[]; yMax: number; colors: ThemeColors }) {
+  const maxY = Math.max(1, yMax || 5);
+  return (
+    <View style={{ width: '100%', height: 220, justifyContent: 'flex-end', paddingTop: 8 }}>
+      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingHorizontal: 8 }}>
+        {series.map((s) => {
+          const v = lastValue(s);
+          const hPct = Math.max(8, (v / maxY) * 100);
+          return (
+            <View key={s.id} style={{ flex: 1, alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+              <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700', marginBottom: 4 }}>
+                {v}
+              </Text>
+              <View
+                style={{
+                  width: '70%',
+                  maxWidth: 48,
+                  height: `${hPct}%`,
+                  backgroundColor: s.color,
+                  borderTopLeftRadius: 6,
+                  borderTopRightRadius: 6,
+                  minHeight: 12,
+                }}
+              />
+            </View>
+          );
+        })}
+      </View>
+      <View
+        style={{
+          height: StyleSheet.hairlineWidth,
+          backgroundColor: colors.border,
+          marginHorizontal: 8,
+        }}
+      />
+      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 8, paddingTop: 6 }}>
+        {series.map((s) => (
+          <Text
+            key={s.id}
+            numberOfLines={1}
+            style={{ flex: 1, textAlign: 'center', color: colors.textMuted, fontSize: 10 }}
+          >
+            {s.title}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function TaskPieDonutChart({
+  series,
+  colors,
+  donut,
+}: {
+  series: Series[];
+  colors: ThemeColors;
+  donut?: boolean;
+}) {
+  const slices = series.map((s) => ({
+    id: s.id,
+    title: s.title,
+    color: s.color,
+    value: lastValue(s),
+  }));
+  const total = slices.reduce((a, s) => a + s.value, 0) || 1;
+  let cursor = 0;
+  const stops: string[] = [];
+  for (const s of slices) {
+    const start = (cursor / total) * 100;
+    cursor += s.value;
+    const end = (cursor / total) * 100;
+    stops.push(`${s.color} ${start}% ${end}%`);
+  }
+  const size = 180;
+  const gradient = `conic-gradient(${stops.join(', ')})`;
+
+  return (
+    <View style={{ alignItems: 'center', justifyContent: 'center', height: 220, gap: 8 }}>
+      <View
+        style={[
+          {
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          Platform.OS === 'web'
+            ? ({ backgroundImage: gradient } as any)
+            : { backgroundColor: colors.border },
+        ]}
+      >
+        {Platform.OS !== 'web' ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', width: size, height: size }}>
+            {slices.map((s) => (
+              <View
+                key={s.id}
+                style={{
+                  width: `${Math.max(10, (s.value / total) * 100)}%`,
+                  height: '100%',
+                  backgroundColor: s.color,
+                }}
+              />
+            ))}
+          </View>
+        ) : null}
+        {donut ? (
+          <View
+            style={{
+              position: 'absolute',
+              width: size * 0.52,
+              height: size * 0.52,
+              borderRadius: (size * 0.52) / 2,
+              backgroundColor: colors.bgElevated,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Text style={{ color: colors.text, fontWeight: '800', fontSize: 18 }}>{slices.length}</Text>
+            <Text style={{ color: colors.textMuted, fontSize: 11 }}>tasks</Text>
+          </View>
+        ) : null}
+      </View>
+      {!donut && Platform.OS === 'web' ? null : null}
+    </View>
+  );
+}
+
+function TaskRadarChart({ series, yMax, colors }: { series: Series[]; yMax: number; colors: ThemeColors }) {
+  const [boxW, setBoxW] = useState(280);
+  const size = Math.min(260, Math.max(200, boxW - 16));
+  const cx = size / 2;
+  const cy = size / 2;
+  const maxR = size * 0.38;
+  const maxY = Math.max(1, yMax || 5);
+  const count = Math.max(3, series.length);
+  // Pad to at least 3 axes for a polygon
+  const axes = series.length
+    ? series
+    : Array.from({ length: 3 }, (_, i) => ({
+        id: `p${i}`,
+        title: '',
+        color: colors.border,
+        values: [1],
+        status: '',
+      }));
+
+  const pointAt = (i: number, value: number) => {
+    const angle = -Math.PI / 2 + (i / count) * Math.PI * 2;
+    const r = (Math.max(0, value) / maxY) * maxR;
+    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  };
+
+  const ringPts = (level: number) =>
+    Array.from({ length: count }, (_, i) => pointAt(i, level));
+
+  const dataPts = axes.map((s, i) => pointAt(i, lastValue(s as Series)));
+
+  return (
+    <View
+      style={{ width: '100%', height: 240, alignItems: 'center', justifyContent: 'center' }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        if (w > 40) setBoxW(w);
+      }}
+    >
+      <View style={{ width: size, height: size }}>
+        {[1, 2, 3, 4, 5].map((lvl) => {
+          const pts = ringPts(lvl);
+          return pts.map((p, i) => {
+            const n = pts[(i + 1) % pts.length];
+            return (
+              <LineSegment
+                key={`ring-${lvl}-${i}`}
+                x1={p.x}
+                y1={p.y}
+                x2={n.x}
+                y2={n.y}
+                color={colors.border}
+                thickness={1}
+              />
+            );
+          });
+        })}
+        {axes.map((_, i) => {
+          const tip = pointAt(i, maxY);
+          return (
+            <LineSegment
+              key={`axis-${i}`}
+              x1={cx}
+              y1={cy}
+              x2={tip.x}
+              y2={tip.y}
+              color={colors.border}
+              thickness={1}
+            />
+          );
+        })}
+        {dataPts.map((p, i) => {
+          const n = dataPts[(i + 1) % dataPts.length];
+          return (
+            <LineSegment
+              key={`data-${i}`}
+              x1={p.x}
+              y1={p.y}
+              x2={n.x}
+              y2={n.y}
+              color={axes[i]?.color || colors.accent}
+              thickness={2.5}
+            />
+          );
+        })}
+        {dataPts.map((p, i) => (
+          <View
+            key={`rdot-${i}`}
+            style={{
+              position: 'absolute',
+              left: p.x - 4,
+              top: p.y - 4,
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              backgroundColor: axes[i]?.color || colors.accent,
+            }}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function FilterDropdown({
+  label,
+  open,
+  onToggle,
+  options,
+  value,
+  onSelect,
+  colors,
+  styles,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  options: { key: string; label: string }[];
+  value: string;
+  onSelect: (key: string) => void;
+  colors: ThemeColors;
+  styles: any;
+}) {
+  return (
+    <View style={{ zIndex: open ? 20 : 1 }}>
+      <TouchableOpacity style={styles.filterBtn} onPress={onToggle}>
+        <Text style={styles.filterText}>{label}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={colors.text} />
+      </TouchableOpacity>
+      {open ? (
+        <View style={[styles.filterMenu, styles.filterMenuAbsolute]}>
+          {options.map((p) => (
+            <TouchableOpacity
+              key={p.key}
+              style={[styles.filterItem, value === p.key && styles.filterItemOn]}
+              onPress={() => onSelect(p.key)}
+            >
+              <Text style={[styles.filterItemText, value === p.key && styles.filterItemTextOn]}>
+                {p.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function DashboardScreen({ navigation }: any) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [period, setPeriod] = useState('this_week');
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [chartType, setChartType] = useState<ChartType>('line');
+  const [periodOpen, setPeriodOpen] = useState(false);
+  const [chartOpen, setChartOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState('');
@@ -247,7 +540,9 @@ export default function DashboardScreen({ navigation }: any) {
   const chartSeries: Series[] = data?.chart?.series || [];
   const announcements = data?.announcements || [];
   const periodLabel = PERIODS.find((p) => p.key === period)?.label || 'This week';
-  const hasChart = chartSeries.length > 0 && chartLabels.length > 0;
+  const chartLabel = CHART_TYPES.find((c) => c.key === chartType)?.label || 'Line chart';
+  const hasChart = chartSeries.length > 0;
+  const yMax = data?.chart?.yMax || 5;
 
   return (
     <AppShell navigation={navigation} active="Dashboard" title="Dashboard">
@@ -278,41 +573,44 @@ export default function DashboardScreen({ navigation }: any) {
           />
         </View>
 
-        <View style={styles.section}>
+        <View style={[styles.section, { overflow: 'visible', zIndex: 5 }]}>
           <View style={styles.sectionHead}>
             <Text style={styles.sectionTitle}>Tasks</Text>
-            <TouchableOpacity
-              style={styles.filterBtn}
-              onPress={() => setFilterOpen((v) => !v)}
-            >
-              <Text style={styles.filterText}>{periodLabel}</Text>
-              <Ionicons
-                name={filterOpen ? 'chevron-up' : 'chevron-down'}
-                size={16}
-                color={colors.text}
+            <View style={styles.filtersRow}>
+              <FilterDropdown
+                label={periodLabel}
+                open={periodOpen}
+                onToggle={() => {
+                  setPeriodOpen((v) => !v);
+                  setChartOpen(false);
+                }}
+                options={PERIODS}
+                value={period}
+                onSelect={(key) => {
+                  setPeriod(key);
+                  setPeriodOpen(false);
+                }}
+                colors={colors}
+                styles={styles}
               />
-            </TouchableOpacity>
-          </View>
-          {filterOpen ? (
-            <View style={styles.filterMenu}>
-              {PERIODS.map((p) => (
-                <TouchableOpacity
-                  key={p.key}
-                  style={[styles.filterItem, period === p.key && styles.filterItemOn]}
-                  onPress={() => {
-                    setPeriod(p.key);
-                    setFilterOpen(false);
-                  }}
-                >
-                  <Text
-                    style={[styles.filterItemText, period === p.key && styles.filterItemTextOn]}
-                  >
-                    {p.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              <FilterDropdown
+                label={chartLabel}
+                open={chartOpen}
+                onToggle={() => {
+                  setChartOpen((v) => !v);
+                  setPeriodOpen(false);
+                }}
+                options={CHART_TYPES}
+                value={chartType}
+                onSelect={(key) => {
+                  setChartType(key as ChartType);
+                  setChartOpen(false);
+                }}
+                colors={colors}
+                styles={styles}
+              />
             </View>
-          ) : null}
+          </View>
 
           {loading ? (
             <ActivityIndicator color={colors.accent} style={{ marginVertical: 24 }} />
@@ -323,12 +621,26 @@ export default function DashboardScreen({ navigation }: any) {
               <Text style={styles.subLabel}>Activity (last 5 tasks)</Text>
               {hasChart ? (
                 <View style={styles.chartWrap}>
-                  <TaskLineChart
-                    labels={chartLabels}
-                    series={chartSeries}
-                    yMax={data?.chart?.yMax || 5}
-                    colors={colors}
-                  />
+                  {chartType === 'line' ? (
+                    <TaskLineChart
+                      labels={chartLabels.length ? chartLabels : ['1', '2', '3', '4', '5', '6', '7']}
+                      series={chartSeries}
+                      yMax={yMax}
+                      colors={colors}
+                    />
+                  ) : null}
+                  {chartType === 'bar' ? (
+                    <TaskBarChart series={chartSeries} yMax={yMax} colors={colors} />
+                  ) : null}
+                  {chartType === 'pie' ? (
+                    <TaskPieDonutChart series={chartSeries} colors={colors} />
+                  ) : null}
+                  {chartType === 'donut' ? (
+                    <TaskPieDonutChart series={chartSeries} colors={colors} donut />
+                  ) : null}
+                  {chartType === 'radar' ? (
+                    <TaskRadarChart series={chartSeries} yMax={yMax} colors={colors} />
+                  ) : null}
                 </View>
               ) : (
                 <Text style={styles.empty}>Chart data unavailable.</Text>
@@ -380,10 +692,7 @@ export default function DashboardScreen({ navigation }: any) {
               {announcements.map((a: any, i: number) => {
                 const img = resolveUrl(a.imageUrl);
                 return (
-                  <View
-                    key={a.id}
-                    style={[styles.newsItem, i > 0 && styles.newsItemBorder]}
-                  >
+                  <View key={a.id} style={[styles.newsItem, i > 0 && styles.newsItemBorder]}>
                     <View style={styles.newsTextCol}>
                       <Text style={styles.newsTitle}>{a.title}</Text>
                       {!!a.body && <Text style={styles.newsBody}>{a.body}</Text>}
@@ -457,7 +766,9 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: 12,
+      flexWrap: 'wrap',
     },
+    filtersRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'flex-start' },
     sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
     sectionHint: { color: colors.textMuted, fontSize: 13, marginTop: -4 },
     subLabel: {
@@ -484,6 +795,19 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 10,
       overflow: 'hidden',
       backgroundColor: colors.bgElevated,
+      marginTop: 4,
+      minWidth: 140,
+    },
+    filterMenuAbsolute: {
+      position: 'absolute',
+      top: 38,
+      right: 0,
+      zIndex: 50,
+      elevation: 8,
+      shadowColor: '#000',
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 4 },
     },
     filterItem: { paddingHorizontal: 12, paddingVertical: 10 },
     filterItemOn: { backgroundColor: colors.accent + '22' },
