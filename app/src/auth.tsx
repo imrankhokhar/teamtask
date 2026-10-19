@@ -51,6 +51,7 @@ export type AppSettings = {
   appName?: string;
   logoUrl?: string | null;
   tagline?: string;
+  notificationsEnabled?: boolean;
 };
 
 const emptySettings: AppSettings = {
@@ -65,6 +66,7 @@ const emptySettings: AppSettings = {
   appName: 'TeamTask',
   logoUrl: null,
   tagline: 'Plan work. Share progress. Stay aligned.',
+  notificationsEnabled: false,
 };
 
 type AuthCtx = {

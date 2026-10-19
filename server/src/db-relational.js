@@ -129,6 +129,7 @@ const SETTINGS_SCALAR_KEYS = [
   'appName',
   'logoUrl',
   'tagline',
+  'notificationsEnabled',
 ];
 
 function bool(v) {

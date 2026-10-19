@@ -14,6 +14,12 @@ const { v4: uuid } = require('uuid');
 const jwt = require('jsonwebtoken');
 
 const { readDb, updateDb, initDb, isCloudDbConfigured, getStoreMode } = require('./db');
+const {
+  getStatus: getOpsStatus,
+  confirmPause: confirmOpsPause,
+  resumeOps,
+  isOpsPaused,
+} = require('./ops-limit');
 const { signToken, authRequired, adminRequired, requirePerm, JWT_SECRET } = require('./auth');
 const {
   MODULES,
@@ -85,6 +91,29 @@ const upload = multer({
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '2mb' }));
+
+/** When admin confirmed a D1 quota pause, block write API calls (reads/login still work). */
+app.use((req, res, next) => {
+  if (!isOpsPaused()) return next();
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  const p = req.path || '';
+  if (
+    p === '/api/auth/login' ||
+    p === '/api/auth/forgot-password' ||
+    p === '/api/auth/reset-password' ||
+    p.startsWith('/api/ops') ||
+    p === '/api/settings/notifications'
+  ) {
+    return next();
+  }
+  return res.status(503).json({
+    error:
+      'Operations paused: daily app data limit reached. An admin must resume after the limit resets (midnight UTC).',
+    code: 'OPS_PAUSED',
+    ops: getOpsStatus(),
+  });
+});
+
 app.use(
   '/uploads',
   express.static(UPLOADS, {
@@ -175,6 +204,7 @@ function sameReminderInstant(a, b) {
 let reminderPassRunning = false;
 
 async function processDueReminders() {
+  if (isOpsPaused()) return 0;
   if (!notificationsEnabled()) return 0;
   if (reminderPassRunning) return 0;
   reminderPassRunning = true;
@@ -646,13 +676,15 @@ app.get('/api/me', authRequired, (req, res) => {
   const db = readDb();
   const user = db.users.find((u) => u.id === req.user.id);
   if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json({
+  const payload = {
     user: publicUser(user, db),
     settings: normalizeSettings(db.settings),
     modules: MODULES,
     actions: ACTIONS,
     permissionCatalog: allPermissionKeys(),
-  });
+  };
+  if (req.isAdmin) payload.ops = getOpsStatus();
+  res.json(payload);
 });
 
 app.post('/api/me/push-token', authRequired, (req, res) => {
@@ -1668,7 +1700,17 @@ app.post('/api/notifications/read-all', authRequired, (req, res) => {
 });
 
 // ---------- Sounds / tones (stored locally on this device) ----------
+function coerceBool(v, fallback = false) {
+  if (typeof v === 'boolean') return v;
+  if (v === 1 || v === '1' || /^true$/i.test(String(v || ''))) return true;
+  if (v === 0 || v === '0' || /^false$/i.test(String(v || ''))) return false;
+  return fallback;
+}
+
 function normalizeSettings(s = {}) {
+  const envNotifyDefault = /^(1|true)$/i.test(
+    String(process.env.TEAMTASK_NOTIFICATIONS ?? '0').trim()
+  );
   return {
     ringtoneUrl: s.ringtoneUrl || null,
     ringtoneName: s.ringtoneName || null,
@@ -1683,6 +1725,10 @@ function normalizeSettings(s = {}) {
     tagline:
       String(s.tagline || 'Plan work. Share progress. Stay aligned.').trim() ||
       'Plan work. Share progress. Stay aligned.',
+    notificationsEnabled: coerceBool(
+      s.notificationsEnabled,
+      envNotifyDefault
+    ),
   };
 }
 
@@ -1887,7 +1933,37 @@ app.get('/api/health', (_req, res) => {
     cloudMode: isCloudDbConfigured(),
     store: getStoreMode(),
     counts,
+    ops: getOpsStatus(),
     time: new Date().toISOString(),
+  });
+});
+
+app.get('/api/ops', authRequired, (req, res) => {
+  res.json({ ops: getOpsStatus() });
+});
+
+app.post('/api/ops/confirm-pause', authRequired, adminRequired, (req, res) => {
+  const ops = confirmOpsPause();
+  console.warn('[ops-limit] Admin confirmed pause — write operations stopped');
+  res.json({ ok: true, ops });
+});
+
+app.post('/api/ops/resume', authRequired, adminRequired, (req, res) => {
+  const ops = resumeOps();
+  console.warn('[ops-limit] Admin resumed operations');
+  res.json({ ok: true, ops });
+});
+
+app.patch('/api/settings/notifications', authRequired, adminRequired, (req, res) => {
+  const enabled = coerceBool(req.body?.enabled, false);
+  updateDb((db) => {
+    db.settings = normalizeSettings(db.settings);
+    db.settings.notificationsEnabled = enabled;
+  });
+  res.json({
+    ok: true,
+    settings: normalizeSettings(readDb().settings),
+    notificationsEnabled: enabled,
   });
 });
 

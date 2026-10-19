@@ -9,10 +9,19 @@ const {
 } = require('./templates');
 
 /**
- * Pause in-app / push / email / reminder notifications to protect D1 free-tier quota.
- * Default OFF. Set TEAMTASK_NOTIFICATIONS=1 to re-enable.
+ * In-app / push / email / reminder notifications.
+ * Admin Settings toggle (`settings.notificationsEnabled`) is the source of truth.
+ * If unset, falls back to env TEAMTASK_NOTIFICATIONS (default off).
  */
 function notificationsEnabled() {
+  try {
+    const s = readDb().settings || {};
+    if (typeof s.notificationsEnabled === 'boolean') return s.notificationsEnabled;
+    if (s.notificationsEnabled === '1' || s.notificationsEnabled === 'true') return true;
+    if (s.notificationsEnabled === '0' || s.notificationsEnabled === 'false') return false;
+  } catch {
+    // db not ready
+  }
   const v = String(process.env.TEAMTASK_NOTIFICATIONS ?? '0').trim();
   return v === '1' || /^true$/i.test(v);
 }
@@ -120,6 +129,12 @@ function pushRealtime(userId, payload) {
  * opts.templateKey / opts.emailVars control SMTP email content from Settings → Templates.
  */
 async function notifyTaskUsers(taskId, { type, title, body, excludeUserId, actorUserId, emailVars = {}, templateKey }) {
+  try {
+    const { isOpsPaused } = require('./ops-limit');
+    if (isOpsPaused()) return [];
+  } catch {
+    // ignore
+  }
   if (!notificationsEnabled()) return [];
 
   // Skip the actor when others will still be notified. If they are the only

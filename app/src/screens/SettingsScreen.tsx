@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   Platform,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -101,11 +102,36 @@ export default function SettingsScreen({ navigation }: any) {
   const [brandMsg, setBrandMsg] = useState('');
   const [brandErr, setBrandErr] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [notifyOn, setNotifyOn] = useState(Boolean(settings.notificationsEnabled));
+  const [notifyBusy, setNotifyBusy] = useState(false);
+  const [notifyMsg, setNotifyMsg] = useState('');
+
+  useEffect(() => {
+    setNotifyOn(Boolean(settings.notificationsEnabled));
+  }, [settings.notificationsEnabled]);
 
   const links = LINKS.filter((l) => {
     if (l.adminOnly && user?.role !== 'admin' && !can('settings.edit')) return false;
     return true;
   });
+
+  async function toggleNotifications(next: boolean) {
+    if (!isAdmin) return;
+    try {
+      setNotifyBusy(true);
+      setNotifyMsg('');
+      setNotifyOn(next);
+      const data = await api.setNotificationsEnabled(next);
+      setSettings({ ...settings, ...data.settings, notificationsEnabled: next });
+      setNotifyMsg(next ? 'Notifications enabled' : 'Notifications paused');
+      await refreshMe();
+    } catch (e: any) {
+      setNotifyOn(Boolean(settings.notificationsEnabled));
+      setNotifyMsg(e.message || 'Failed to update notifications');
+    } finally {
+      setNotifyBusy(false);
+    }
+  }
 
   async function saveBranding() {
     try {
@@ -266,6 +292,39 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         </View>
 
+        {isAdmin ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            <Text style={styles.sectionHint}>
+              When off, the app stops reminders, push, email, and in-app notification delivery
+              (protects D1 quota). Turn on only when you need them.
+            </Text>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleLabel}>
+                  {notifyOn ? 'Notifications on' : 'Notifications off'}
+                </Text>
+                <Text style={styles.meta}>
+                  {notifyOn
+                    ? 'Reminders and alerts will be sent'
+                    : 'All notification operations are stopped'}
+                </Text>
+              </View>
+              {notifyBusy ? (
+                <ActivityIndicator color={colors.accent} />
+              ) : (
+                <Switch
+                  value={notifyOn}
+                  onValueChange={toggleNotifications}
+                  trackColor={{ false: colors.border, true: colors.accent }}
+                  thumbColor="#fff"
+                />
+              )}
+            </View>
+            {!!notifyMsg && <Text style={styles.bannerOk}>{notifyMsg}</Text>}
+          </View>
+        ) : null}
+
         {canBrand ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>App branding</Text>
@@ -365,6 +424,13 @@ function makeStyles(colors: ThemeColors) {
     },
     sectionTitle: { color: colors.text, fontWeight: '800', fontSize: 16 },
     sectionHint: { color: colors.textMuted, marginTop: 6, marginBottom: 12, fontSize: 13 },
+    toggleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginTop: 4,
+    },
+    toggleLabel: { color: colors.text, fontWeight: '700', fontSize: 15 },
     themeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     themeCard: {
       flexGrow: 1,

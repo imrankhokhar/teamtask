@@ -209,6 +209,11 @@ export const api = {
   branding: () => request('/api/branding', { token: null }),
   updateBranding: (body: { appName?: string; tagline?: string }) =>
     request('/api/settings/branding', { method: 'PATCH', body }),
+  opsStatus: () => request('/api/ops'),
+  confirmOpsPause: () => request('/api/ops/confirm-pause', { method: 'POST' }),
+  resumeOps: () => request('/api/ops/resume', { method: 'POST' }),
+  setNotificationsEnabled: (enabled: boolean) =>
+    request('/api/settings/notifications', { method: 'PATCH', body: { enabled } }),
   uploadLogo: async (uri: string, name: string, mimeType?: string, fileObj?: any) => {
     const form = new FormData();
     if (Platform.OS === 'web') {

@@ -33,6 +33,7 @@ import FuelCalScreen from './src/screens/FuelCalScreen';
 import { refreshApiUrl } from './src/api';
 import LoadingView from './src/components/LoadingView';
 import NotifyToasts from './src/components/NotifyToasts';
+import QuotaLimitModal from './src/components/QuotaLimitModal';
 
 const Stack = createNativeStackNavigator();
 
@@ -147,6 +148,7 @@ function ThemedApp() {
     >
       <RootNav />
       <NotifyToasts />
+      <QuotaLimitModal />
     </NavigationContainer>
   );
 }

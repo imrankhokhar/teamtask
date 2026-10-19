@@ -13,6 +13,10 @@ const {
   initRelationalStore,
   saveToRelational,
 } = require('./db-relational');
+const {
+  loadFromDisk: loadOpsLimitFromDisk,
+  reportDbError,
+} = require('./ops-limit');
 
 function resolveDataDir() {
   if (process.env.TEAMTASK_DATA_DIR) return process.env.TEAMTASK_DATA_DIR;
@@ -315,12 +319,16 @@ async function queryD1(sql, params = []) {
         detail = parsed.errors.map((e) => e.message || JSON.stringify(e)).join('; ');
       }
     } catch {}
-    throw new Error(`Cloudflare D1 HTTP ${res.status}: ${detail}`);
+    const err = new Error(`Cloudflare D1 HTTP ${res.status}: ${detail}`);
+    reportDbError(err);
+    throw err;
   }
   const body = await res.json();
   if (!body.success) {
     const msg = (body.errors || []).map((e) => e.message || JSON.stringify(e)).join('; ');
-    throw new Error(`Cloudflare D1 error: ${msg || 'unknown error'}`);
+    const err = new Error(`Cloudflare D1 error: ${msg || 'unknown error'}`);
+    reportDbError(err);
+    throw err;
   }
   const first = body.result?.[0];
   return first?.results || [];
@@ -357,9 +365,9 @@ function scheduleRemoteFlush() {
     flushRemote().catch((err) => {
       const msg = err && err.message ? err.message : String(err);
       console.error('DB flush failed:', msg);
-      if (/rows_written|exceeded|10100|too many/i.test(msg)) {
+      if (reportDbError(err)) {
         console.error(
-          'Tip: Cloudflare D1 free-tier write limit hit. Set TEAMTASK_SQLITE=1 and comment out CLOUDFLARE_* in .env until the daily limit resets.'
+          'Tip: D1 free-tier limit hit — admins will see a modal; confirm to pause write operations until the daily reset.'
         );
       }
     });
@@ -510,6 +518,8 @@ async function initFileStore() {
  * TEAMTASK_DB_FALLBACK=none.
  */
 async function initDb() {
+  loadOpsLimitFromDisk(DATA_DIR);
+
   const forceSqlite = /^(1|true|yes)$/i.test(
     String(process.env.TEAMTASK_FORCE_SQLITE || '').trim()
   );
@@ -536,6 +546,7 @@ async function initDb() {
         'Cloudflare D1 initialization failed:',
         formatDbError(err)
       );
+      reportDbError(err);
       const msg = formatDbError(err);
       // Free-tier read/write caps — keep the site up on local SQLite until midnight UTC.
       if (/exceeded|row read|rows_written|free tier|10100|too many/i.test(msg)) {
