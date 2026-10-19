@@ -30,6 +30,8 @@ import ConnectionScreen from './src/screens/ConnectionScreen';
 import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import FuelCalScreen from './src/screens/FuelCalScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
+import AnnouncementsScreen from './src/screens/AnnouncementsScreen';
 import { refreshApiUrl } from './src/api';
 import LoadingView from './src/components/LoadingView';
 import NotifyToasts from './src/components/NotifyToasts';
@@ -88,6 +90,7 @@ function RootNav() {
           </>
         ) : (
           <>
+            <Stack.Screen name="Dashboard" component={DashboardScreen} />
             <Stack.Screen name="Tasks" component={TasksScreen} />
             <Stack.Screen name="CreateTask" component={CreateTaskScreen} />
             <Stack.Screen name="TaskDetail" component={TaskDetailScreen} />
@@ -97,6 +100,7 @@ function RootNav() {
             <Stack.Screen name="Notifications" component={NotificationsScreen} />
             <Stack.Screen name="FuelCal" component={FuelCalScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
+            <Stack.Screen name="Announcements" component={AnnouncementsScreen} />
             <Stack.Screen name="Profile" component={ProfileScreen} />
             <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
             <Stack.Screen name="Sounds" component={SoundsScreen} />

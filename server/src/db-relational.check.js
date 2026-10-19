@@ -71,6 +71,7 @@ function seed() {
     checklistReplies: [],
     notifications: [],
     fuelCalHistory: [],
+    announcements: [],
     settings: { appName: 'TeamTask' },
   };
 }

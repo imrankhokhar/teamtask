@@ -191,6 +191,7 @@ function createSeededDb() {
     checklistReplies: [],
     notifications: [],
     fuelCalHistory: [],
+    announcements: [],
     settings: {
       ringtoneUrl: null,
       ringtoneName: null,
@@ -241,6 +242,10 @@ function migrateDb(db) {
   }
   if (!Array.isArray(db.fuelCalHistory)) {
     db.fuelCalHistory = [];
+    changed = true;
+  }
+  if (!Array.isArray(db.announcements)) {
+    db.announcements = [];
     changed = true;
   }
   const adminRole = db.roles.find((r) => r.id === 'role-admin' || r.name === 'Admin');

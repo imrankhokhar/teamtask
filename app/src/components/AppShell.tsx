@@ -32,6 +32,12 @@ type NavItem = {
 
 const MENU: NavItem[] = [
   {
+    key: 'Dashboard',
+    label: 'Dashboard',
+    icon: 'grid-outline',
+    iconOn: 'grid',
+  },
+  {
     key: 'Tasks',
     label: 'Tasks',
     icon: 'checkbox-outline',
@@ -83,6 +89,7 @@ const MENU: NavItem[] = [
 ];
 
 const MODULE_INFO: Record<string, string> = {
+  Dashboard: 'Overview of totals, task activity, and company news / announcements.',
   Tasks: 'Create and track work. Open a card for details, or use Edit on the card to change it.',
   Teams:
     'Non-admins only see teams they belong to. Admins (or roles with “view all teams”) see every team.',

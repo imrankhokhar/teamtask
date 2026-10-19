@@ -214,6 +214,49 @@ export const api = {
   resumeOps: () => request('/api/ops/resume', { method: 'POST' }),
   setNotificationsEnabled: (enabled: boolean) =>
     request('/api/settings/notifications', { method: 'PATCH', body: { enabled } }),
+  dashboard: (period?: string) =>
+    request(`/api/dashboard?period=${encodeURIComponent(period || 'this_week')}`),
+  announcements: () => request('/api/announcements'),
+  createAnnouncement: async (opts: {
+    title: string;
+    body?: string;
+    imageUri?: string | null;
+    imageName?: string;
+    imageMime?: string;
+    imageFile?: any;
+  }) => {
+    const form = new FormData();
+    form.append('title', opts.title);
+    form.append('body', opts.body || '');
+    if (opts.imageUri) {
+      if (Platform.OS === 'web') {
+        let blob: Blob;
+        if (opts.imageFile instanceof Blob) blob = opts.imageFile;
+        else {
+          const res = await fetch(opts.imageUri);
+          blob = await res.blob();
+        }
+        const filename = opts.imageName || 'announce.png';
+        try {
+          form.append(
+            'image',
+            new File([blob], filename, { type: opts.imageMime || blob.type || 'image/png' })
+          );
+        } catch {
+          form.append('image', blob, filename);
+        }
+      } else {
+        form.append('image', {
+          uri: opts.imageUri,
+          name: opts.imageName || 'announce.png',
+          type: opts.imageMime || 'image/png',
+        } as any);
+      }
+    }
+    return request('/api/announcements', { method: 'POST', formData: form });
+  },
+  deleteAnnouncement: (id: string) =>
+    request(`/api/announcements/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   uploadLogo: async (uri: string, name: string, mimeType?: string, fileObj?: any) => {
     const form = new FormData();
     if (Platform.OS === 'web') {

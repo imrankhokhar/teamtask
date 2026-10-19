@@ -7,6 +7,7 @@ const { v4: uuid } = require('uuid');
 
 /** Cap in-app notifications so D1 free-tier boots never SELECT * tens of thousands of rows. */
 const MAX_NOTIFICATIONS_KEPT = 500;
+const MAX_ANNOUNCEMENTS_KEPT = 50;
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS roles (
@@ -108,6 +109,14 @@ const SCHEMA = [
     monthly REAL NOT NULL,
     total REAL NOT NULL,
     created_by TEXT
+  )`,
+  `CREATE TABLE IF NOT EXISTS announcements (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    image_url TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL
   )`,
   // Legacy blob table — kept for one-time migration from old installs
   `CREATE TABLE IF NOT EXISTS appstate (
@@ -469,6 +478,25 @@ async function loadFromRelational(adapter) {
     fuelCalHistory = [];
   }
 
+  let announcements = [];
+  try {
+    announcements = (
+      await adapter.query(
+        'SELECT * FROM announcements ORDER BY created_at DESC LIMIT ?',
+        [MAX_ANNOUNCEMENTS_KEPT]
+      )
+    ).map((r) => ({
+      id: r.id,
+      title: r.title || '',
+      body: r.body || '',
+      imageUrl: r.image_url || null,
+      createdBy: r.created_by || null,
+      createdAt: r.created_at,
+    }));
+  } catch {
+    announcements = [];
+  }
+
   return {
     roles,
     users,
@@ -482,6 +510,7 @@ async function loadFromRelational(adapter) {
     notifications,
     settings,
     fuelCalHistory,
+    announcements,
   };
 }
 
@@ -513,6 +542,9 @@ function normalizeDb(db) {
     notifications: trimNotificationsList(db.notifications),
     settings: db.settings || {},
     fuelCalHistory: uniqByKey(db.fuelCalHistory, (x) => x.id),
+    announcements: uniqByKey(db.announcements || [], (x) => x.id)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, MAX_ANNOUNCEMENTS_KEPT),
   };
 }
 
@@ -617,6 +649,22 @@ function notificationInsert(n) {
       n.body || '',
       bool(n.read),
       n.createdAt,
+    ],
+  };
+}
+
+function announcementInsert(a) {
+  return {
+    sql: `INSERT OR REPLACE INTO announcements (
+      id, title, body, image_url, created_by, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?)`,
+    params: [
+      a.id,
+      a.title || '',
+      a.body || '',
+      a.imageUrl || null,
+      a.createdBy || null,
+      a.createdAt,
     ],
   };
 }
@@ -754,6 +802,12 @@ function buildIncrementalOps(prevDb, nextDb) {
     });
   }
 
+  const anns = diffByKey(prev.announcements || [], next.announcements || [], (x) => x.id);
+  for (const id of anns.deletes) {
+    ops.push({ sql: 'DELETE FROM announcements WHERE id = ?', params: [id] });
+  }
+  for (const a of anns.upserts) ops.push(announcementInsert(a));
+
   const prevSettings = settingsToRows(prev.settings);
   const nextSettings = settingsToRows(next.settings);
   const settingsDiff = diffByKey(prevSettings, nextSettings, (x) => x.key);
@@ -789,6 +843,7 @@ function buildFullReplaceOps(db) {
       'roles',
       'app_settings',
       'fuel_cal_history',
+      'announcements',
     ].map((t) => ({ sql: `DELETE FROM ${t}`, params: [] })),
     ...buildIncrementalOps(empty, next),
   ];
@@ -946,6 +1001,7 @@ async function initRelationalStore(adapter, { docId, createSeededDb, migrateDb }
 module.exports = {
   SCHEMA,
   MAX_NOTIFICATIONS_KEPT,
+  MAX_ANNOUNCEMENTS_KEPT,
   createSqliteAdapter,
   createD1Adapter,
   createPgAdapter,

@@ -32,6 +32,7 @@ const {
 const {
   registerSocket,
   notifyTaskUsers,
+  notifyAllUsers,
   getTaskRecipientIds,
   pushRealtime,
   sendTemplatedEmail,
@@ -1974,6 +1975,170 @@ app.patch(
     });
   }
 );
+
+// ---------- Dashboard ----------
+function periodBounds(period) {
+  const now = new Date();
+  const startOfDay = (d) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const end = new Date(now);
+  let start;
+  switch (String(period || 'this_week')) {
+    case 'today':
+      start = startOfDay(now);
+      break;
+    case 'last_week': {
+      const day = now.getDay() || 7;
+      const thisMon = startOfDay(now);
+      thisMon.setDate(thisMon.getDate() - (day - 1));
+      start = new Date(thisMon);
+      start.setDate(start.getDate() - 7);
+      end.setTime(thisMon.getTime() - 1);
+      break;
+    }
+    case 'this_month':
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+    case 'last_month':
+      start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      end.setTime(new Date(now.getFullYear(), now.getMonth(), 1).getTime() - 1);
+      break;
+    case 'this_week':
+    default: {
+      const day = now.getDay() || 7;
+      start = startOfDay(now);
+      start.setDate(start.getDate() - (day - 1));
+      break;
+    }
+  }
+  return { start, end };
+}
+
+app.get('/api/dashboard', authRequired, (req, res) => {
+  const db = readDb();
+  const period = String(req.query.period || 'this_week');
+  const { start, end } = periodBounds(period);
+  const inPeriod = (iso) => {
+    const t = new Date(iso).getTime();
+    return !Number.isNaN(t) && t >= start.getTime() && t <= end.getTime();
+  };
+  const tasksInPeriod = (db.tasks || []).filter(
+    (t) => inPeriod(t.createdAt) || inPeriod(t.updatedAt)
+  );
+  const byStatus = {};
+  for (const t of tasksInPeriod) {
+    const s = t.status || 'pending';
+    byStatus[s] = (byStatus[s] || 0) + 1;
+  }
+  const announcements = [...(db.announcements || [])]
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 20);
+  res.json({
+    counts: {
+      tasks: (db.tasks || []).length,
+      teams: (db.teams || []).length,
+      users: (db.users || []).length,
+    },
+    period,
+    chart: {
+      byStatus: Object.keys(byStatus).map((status) => ({
+        status,
+        count: byStatus[status],
+      })),
+      total: tasksInPeriod.length,
+    },
+    announcements,
+  });
+});
+
+// ---------- Announcements / News ----------
+app.get('/api/announcements', authRequired, (req, res) => {
+  const list = [...(readDb().announcements || [])].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  );
+  res.json({ announcements: list });
+});
+
+const announcementUpload = multer({
+  storage: multer.diskStorage({
+    destination: UPLOADS,
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '') || '.png';
+      cb(null, `announce-${Date.now()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 4 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok =
+      /^image\//i.test(file.mimetype || '') ||
+      /\.(png|jpe?g|gif|webp)$/i.test(file.originalname || '');
+    if (!ok) return cb(new Error('Image files only'));
+    cb(null, true);
+  },
+});
+
+app.post(
+  '/api/announcements',
+  authRequired,
+  requirePerm('settings.edit'),
+  announcementUpload.single('image'),
+  async (req, res) => {
+    const title = String(req.body?.title || '').trim();
+    const body = String(req.body?.body || req.body?.description || '').trim();
+    if (!title) {
+      return res.status(400).json({
+        error: 'Please fix the highlighted fields',
+        fields: { title: 'Title is required' },
+      });
+    }
+    const item = {
+      id: uuid(),
+      title,
+      body,
+      imageUrl: req.file ? `/uploads/${req.file.filename}` : null,
+      createdBy: req.user.id,
+      createdAt: new Date().toISOString(),
+    };
+    updateDb((db) => {
+      if (!Array.isArray(db.announcements)) db.announcements = [];
+      db.announcements.unshift(item);
+      db.announcements = db.announcements.slice(0, 50);
+    });
+    await notifyAllUsers({
+      type: 'announcement',
+      title: `Announcement: ${title}`,
+      body: body.slice(0, 200) || title,
+      excludeUserId: null,
+      meta: { announcementId: item.id },
+    });
+    res.status(201).json({ announcement: item });
+  }
+);
+
+app.delete('/api/announcements/:id', authRequired, requirePerm('settings.edit'), (req, res) => {
+  const id = req.params.id;
+  let removed = null;
+  updateDb((db) => {
+    const list = db.announcements || [];
+    const hit = list.find((a) => a.id === id);
+    if (!hit) return;
+    removed = hit;
+    db.announcements = list.filter((a) => a.id !== id);
+    if (hit.imageUrl) {
+      const old = path.join(UPLOADS, path.basename(hit.imageUrl));
+      try {
+        if (fs.existsSync(old)) fs.unlinkSync(old);
+      } catch {
+        // ignore
+      }
+    }
+  });
+  if (!removed) return res.status(404).json({ error: 'Not found' });
+  res.json({ ok: true });
+});
 
 // ---------- Free SMTP email settings ----------
 app.get('/api/smtp', authRequired, requirePerm('settings.view'), (req, res) => {

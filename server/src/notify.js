@@ -221,6 +221,51 @@ async function notifyTaskUsers(taskId, { type, title, body, excludeUserId, actor
   return created;
 }
 
+/** Broadcast in-app + push (+ optional email) to every user. Used for announcements. */
+async function notifyAllUsers({ type, title, body, excludeUserId, meta = {} }) {
+  try {
+    const { isOpsPaused } = require('./ops-limit');
+    if (isOpsPaused()) return [];
+  } catch {
+    // ignore
+  }
+  if (!notificationsEnabled()) return [];
+
+  const db = readDb();
+  const recipientIds = (db.users || [])
+    .map((u) => u.id)
+    .filter((id) => id && id !== excludeUserId);
+  if (!recipientIds.length) return [];
+
+  const created = [];
+  const pushTokens = [];
+  updateDb((store) => {
+    for (const userId of recipientIds) {
+      const n = {
+        id: uuid(),
+        userId,
+        taskId: null,
+        type: type || 'announcement',
+        title,
+        body,
+        read: false,
+        createdAt: new Date().toISOString(),
+      };
+      store.notifications.push(n);
+      created.push(n);
+      const user = store.users.find((u) => u.id === userId);
+      if (user?.pushToken) pushTokens.push(user.pushToken);
+    }
+    store.notifications = trimNotificationsList(store.notifications);
+  });
+
+  for (const n of created) {
+    pushRealtime(n.userId, { type: 'notification', items: [n] });
+  }
+  await sendExpoPush(pushTokens, title, body, { type: type || 'announcement', ...meta });
+  return created;
+}
+
 async function sendTemplatedEmail(toUser, templateKey, vars = {}) {
   const { sendMail } = require('./mail');
   const db = readDb();
@@ -246,6 +291,7 @@ module.exports = {
   registerSocket,
   getTaskRecipientIds,
   notifyTaskUsers,
+  notifyAllUsers,
   pushRealtime,
   sendTemplatedEmail,
   notificationsEnabled,

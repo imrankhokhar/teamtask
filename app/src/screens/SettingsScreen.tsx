@@ -54,6 +54,13 @@ const LINKS: {
     adminOnly: true,
   },
   {
+    key: 'Announcements',
+    label: 'Announcements / News',
+    desc: 'Post news with title, description, and image for everyone’s dashboard',
+    icon: 'megaphone-outline',
+    adminOnly: true,
+  },
+  {
     key: 'Admin',
     label: 'Admin & storage',
     desc: 'Storage info and admin tools',
