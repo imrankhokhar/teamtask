@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, createElement } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { api, getApiBaseUrlSyncFallback } from '../api';
@@ -34,8 +35,162 @@ function statusLabel(s: string) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+type Series = {
+  id: string;
+  title: string;
+  status: string;
+  color: string;
+  values: (number | null)[];
+};
+
+function TaskLineChart({
+  labels,
+  series,
+  yMax,
+  width,
+  colors,
+}: {
+  labels: string[];
+  series: Series[];
+  yMax: number;
+  width: number;
+  colors: ThemeColors;
+}) {
+  const height = 200;
+  const padL = 28;
+  const padR = 12;
+  const padT = 12;
+  const padB = 28;
+  const w = Math.max(280, width);
+  const innerW = w - padL - padR;
+  const innerH = height - padT - padB;
+  const n = Math.max(1, labels.length - 1);
+  const maxY = Math.max(1, yMax || 5);
+
+  const xAt = (i: number) => padL + (labels.length <= 1 ? innerW / 2 : (i / n) * innerW);
+  const yAt = (v: number) => padT + innerH - (v / maxY) * innerH;
+
+  const grid = [1, 2, 3, 4, 5].map((v) => ({
+    v,
+    y: yAt(v),
+  }));
+
+  const polylines = series.map((s) => {
+    const pts: string[] = [];
+    s.values.forEach((v, i) => {
+      if (v == null) return;
+      pts.push(`${xAt(i)},${yAt(v)}`);
+    });
+    return { ...s, points: pts.join(' ') };
+  });
+
+  // Label ticks: first, middle, last
+  const tickIdx = Array.from(
+    new Set(
+      [0, Math.floor(labels.length / 2), labels.length - 1].filter(
+        (i) => i >= 0 && i < labels.length
+      )
+    )
+  );
+
+  if (Platform.OS === 'web') {
+    return createElement(
+      'svg',
+      {
+        width: w,
+        height,
+        viewBox: `0 0 ${w} ${height}`,
+        style: { maxWidth: '100%', display: 'block' },
+      },
+      ...grid.map((g) =>
+        createElement('line', {
+          key: `g${g.v}`,
+          x1: padL,
+          x2: w - padR,
+          y1: g.y,
+          y2: g.y,
+          stroke: colors.border,
+          strokeWidth: 1,
+          strokeDasharray: '4 4',
+        })
+      ),
+      createElement('line', {
+        x1: padL,
+        y1: padT,
+        x2: padL,
+        y2: height - padB,
+        stroke: colors.border,
+        strokeWidth: 1,
+      }),
+      createElement('line', {
+        x1: padL,
+        y1: height - padB,
+        x2: w - padR,
+        y2: height - padB,
+        stroke: colors.border,
+        strokeWidth: 1,
+      }),
+      ...polylines.map((s) =>
+        s.points
+          ? createElement('polyline', {
+              key: s.id,
+              fill: 'none',
+              stroke: s.color,
+              strokeWidth: 2.5,
+              strokeLinejoin: 'round',
+              strokeLinecap: 'round',
+              points: s.points,
+            })
+          : null
+      ),
+      ...series.flatMap((s) =>
+        s.values.map((v, i) =>
+          v == null
+            ? null
+            : createElement('circle', {
+                key: `${s.id}-${i}`,
+                cx: xAt(i),
+                cy: yAt(v),
+                r: 3.5,
+                fill: s.color,
+              })
+        )
+      ),
+      ...tickIdx.map((i) =>
+        createElement(
+          'text',
+          {
+            key: `t${i}`,
+            x: xAt(i),
+            y: height - 8,
+            fill: colors.textMuted,
+            fontSize: 10,
+            textAnchor: 'middle',
+          },
+          labels[i]
+        )
+      )
+    );
+  }
+
+  // Native fallback: colored dots in rows
+  return (
+    <View style={{ gap: 8, paddingVertical: 8 }}>
+      {series.map((s) => (
+        <View key={s.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: s.color }} />
+          <Text style={{ color: colors.text, flex: 1 }} numberOfLines={1}>
+            {s.title}
+          </Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export default function DashboardScreen({ navigation }: any) {
   const { colors } = useTheme();
+  const { width: winW } = useWindowDimensions();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [period, setPeriod] = useState('this_week');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -61,10 +216,12 @@ export default function DashboardScreen({ navigation }: any) {
   }, [load]);
 
   const counts = data?.counts || { tasks: 0, teams: 0, users: 0 };
-  const chart = data?.chart?.byStatus || [];
-  const maxBar = Math.max(1, ...chart.map((c: any) => c.count || 0));
+  const recentTasks = data?.recentTasks || [];
+  const chartLabels: string[] = data?.chart?.labels || [];
+  const chartSeries: Series[] = data?.chart?.series || [];
   const announcements = data?.announcements || [];
   const periodLabel = PERIODS.find((p) => p.key === period)?.label || 'This week';
+  const chartWidth = Math.min(640, Math.max(280, winW - 64));
 
   return (
     <AppShell navigation={navigation} active="Dashboard" title="Dashboard">
@@ -133,30 +290,54 @@ export default function DashboardScreen({ navigation }: any) {
 
           {loading ? (
             <ActivityIndicator color={colors.accent} style={{ marginVertical: 24 }} />
-          ) : chart.length === 0 ? (
-            <Text style={styles.empty}>No tasks in this period.</Text>
+          ) : recentTasks.length === 0 ? (
+            <Text style={styles.empty}>No tasks yet.</Text>
           ) : (
-            <View style={styles.chart}>
-              {chart.map((row: any) => (
-                <View key={row.status} style={styles.barRow}>
-                  <Text style={styles.barLabel} numberOfLines={1}>
-                    {statusLabel(row.status)}
-                  </Text>
-                  <View style={styles.barTrack}>
-                    <View
-                      style={[
-                        styles.barFill,
-                        { width: `${Math.round((row.count / maxBar) * 100)}%` },
-                      ]}
-                    />
+            <>
+              <Text style={styles.subLabel}>Activity (last 5 tasks)</Text>
+              <View style={styles.chartWrap}>
+                <TaskLineChart
+                  labels={chartLabels}
+                  series={chartSeries}
+                  yMax={data?.chart?.yMax || 5}
+                  width={chartWidth}
+                  colors={colors}
+                />
+              </View>
+              <View style={styles.legend}>
+                {chartSeries.map((s) => (
+                  <View key={s.id} style={styles.legendItem}>
+                    <View style={[styles.legendDot, { backgroundColor: s.color }]} />
+                    <Text style={styles.legendText} numberOfLines={1}>
+                      {s.title}
+                    </Text>
                   </View>
-                  <Text style={styles.barCount}>{row.count}</Text>
-                </View>
-              ))}
-              <Text style={styles.chartFoot}>
-                {data?.chart?.total || 0} task{(data?.chart?.total || 0) === 1 ? '' : 's'} in period
-              </Text>
-            </View>
+                ))}
+              </View>
+
+              <Text style={[styles.subLabel, { marginTop: 8 }]}>Latest tasks</Text>
+              <View style={styles.taskList}>
+                {recentTasks.map((t: any, idx: number) => {
+                  const color = chartSeries[idx]?.color || colors.accent;
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      style={styles.taskRow}
+                      onPress={() => navigation.navigate('TaskDetail', { id: t.id })}
+                    >
+                      <View style={[styles.taskDot, { backgroundColor: color }]} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.taskTitle} numberOfLines={1}>
+                          {t.title}
+                        </Text>
+                        <Text style={styles.taskMeta}>{statusLabel(t.status)}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
           )}
         </View>
 
@@ -166,21 +347,28 @@ export default function DashboardScreen({ navigation }: any) {
           {announcements.length === 0 ? (
             <Text style={styles.empty}>No announcements yet.</Text>
           ) : (
-            announcements.map((a: any) => {
-              const img = resolveUrl(a.imageUrl);
-              return (
-                <View key={a.id} style={styles.newsCard}>
-                  {img ? (
-                    <Image source={{ uri: img }} style={styles.newsImg} resizeMode="cover" />
-                  ) : null}
-                  <Text style={styles.newsTitle}>{a.title}</Text>
-                  {!!a.body && <Text style={styles.newsBody}>{a.body}</Text>}
-                  <Text style={styles.newsMeta}>
-                    {a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}
-                  </Text>
-                </View>
-              );
-            })
+            <View style={styles.newsBox}>
+              {announcements.map((a: any, i: number) => {
+                const img = resolveUrl(a.imageUrl);
+                return (
+                  <View
+                    key={a.id}
+                    style={[styles.newsItem, i > 0 && styles.newsItemBorder]}
+                  >
+                    <View style={styles.newsTextCol}>
+                      <Text style={styles.newsTitle}>{a.title}</Text>
+                      {!!a.body && <Text style={styles.newsBody}>{a.body}</Text>}
+                      <Text style={styles.newsMeta}>
+                        {a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}
+                      </Text>
+                    </View>
+                    {img ? (
+                      <Image source={{ uri: img }} style={styles.newsImg} resizeMode="cover" />
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
           )}
         </View>
       </ScrollView>
@@ -243,6 +431,7 @@ function makeStyles(colors: ThemeColors) {
     },
     sectionTitle: { color: colors.text, fontSize: 17, fontWeight: '800' },
     sectionHint: { color: colors.textMuted, fontSize: 13, marginTop: -4 },
+    subLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' },
     filterBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -267,31 +456,50 @@ function makeStyles(colors: ThemeColors) {
     filterItemText: { color: colors.text, fontWeight: '600' },
     filterItemTextOn: { color: colors.accent, fontWeight: '800' },
     empty: { color: colors.textMuted, fontSize: 14, paddingVertical: 8 },
-    chart: { gap: 10, marginTop: 4 },
-    barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    barLabel: { width: 100, color: colors.textMuted, fontSize: 12, fontWeight: '600' },
-    barTrack: {
-      flex: 1,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: colors.bgElevated,
-      overflow: 'hidden',
+    chartWrap: { overflow: 'hidden', borderRadius: 8 },
+    legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: '48%' },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
+    legendText: { color: colors.textMuted, fontSize: 12, flexShrink: 1 },
+    taskList: { gap: 0 },
+    taskRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      paddingVertical: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
     },
-    barFill: { height: '100%', backgroundColor: colors.accent, borderRadius: 7 },
-    barCount: { width: 28, textAlign: 'right', color: colors.text, fontWeight: '700', fontSize: 12 },
-    chartFoot: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
-    newsCard: {
+    taskDot: { width: 10, height: 10, borderRadius: 5 },
+    taskTitle: { color: colors.text, fontWeight: '700', fontSize: 14 },
+    taskMeta: { color: colors.textMuted, fontSize: 12, marginTop: 2 },
+    newsBox: {
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 12,
-      padding: 12,
       backgroundColor: colors.bgElevated,
-      gap: 6,
-      marginTop: 4,
+      overflow: 'hidden',
     },
-    newsImg: { width: '100%', height: 160, borderRadius: 10, marginBottom: 4 },
-    newsTitle: { color: colors.text, fontWeight: '800', fontSize: 16 },
-    newsBody: { color: colors.text, fontSize: 14, lineHeight: 20 },
-    newsMeta: { color: colors.textMuted, fontSize: 12 },
+    newsItem: {
+      flexDirection: 'row',
+      gap: 12,
+      padding: 12,
+      alignItems: 'flex-start',
+    },
+    newsItemBorder: {
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    newsTextCol: { flex: 1, gap: 4, minWidth: 0 },
+    newsImg: {
+      width: 88,
+      height: 66,
+      borderRadius: 8,
+      backgroundColor: colors.border,
+      flexShrink: 0,
+    },
+    newsTitle: { color: colors.text, fontWeight: '800', fontSize: 15 },
+    newsBody: { color: colors.text, fontSize: 13, lineHeight: 18 },
+    newsMeta: { color: colors.textMuted, fontSize: 11 },
   });
 }

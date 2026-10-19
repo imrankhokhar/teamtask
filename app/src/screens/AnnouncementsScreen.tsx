@@ -224,18 +224,20 @@ export default function AnnouncementsScreen({ navigation }: any) {
               const img = resolveUrl(a.imageUrl);
               return (
                 <View key={a.id} style={styles.card}>
+                  <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
+                    <Text style={styles.cardTitle}>{a.title}</Text>
+                    {!!a.body && <Text style={styles.cardBody}>{a.body}</Text>}
+                    <Text style={styles.meta}>
+                      {a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}
+                    </Text>
+                    {canEdit ? (
+                      <TouchableOpacity onPress={() => remove(a.id)}>
+                        <Text style={styles.delete}>Delete</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                   {img ? (
                     <Image source={{ uri: img }} style={styles.cardImg} resizeMode="cover" />
-                  ) : null}
-                  <Text style={styles.cardTitle}>{a.title}</Text>
-                  {!!a.body && <Text style={styles.cardBody}>{a.body}</Text>}
-                  <Text style={styles.meta}>
-                    {a.createdAt ? new Date(a.createdAt).toLocaleString() : ''}
-                  </Text>
-                  {canEdit ? (
-                    <TouchableOpacity onPress={() => remove(a.id)}>
-                      <Text style={styles.delete}>Delete</Text>
-                    </TouchableOpacity>
                   ) : null}
                 </View>
               );
@@ -301,16 +303,15 @@ function makeStyles(colors: ThemeColors) {
     bannerOk: { color: colors.accent },
     bannerErr: { color: colors.danger },
     card: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      padding: 12,
-      gap: 6,
-      backgroundColor: colors.bgElevated,
-      marginTop: 4,
+      flexDirection: 'row',
+      gap: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingVertical: 12,
+      alignItems: 'flex-start',
     },
-    cardImg: { width: '100%', height: 140, borderRadius: 8 },
-    cardTitle: { color: colors.text, fontWeight: '800', fontSize: 15 },
+    cardImg: { width: 88, height: 66, borderRadius: 8, backgroundColor: colors.border },
+    cardTitle: { color: colors.text, fontWeight: '800', fontSize: 15, flex: 1 },
     cardBody: { color: colors.text, fontSize: 14, lineHeight: 20 },
     meta: { color: colors.textMuted, fontSize: 12 },
     delete: { color: colors.danger, fontWeight: '700', marginTop: 4 },

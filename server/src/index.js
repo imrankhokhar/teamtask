@@ -2017,22 +2017,65 @@ function periodBounds(period) {
   return { start, end };
 }
 
+function statusScore(status) {
+  const map = {
+    pending: 1,
+    reopen: 1,
+    ready: 2,
+    ongoing: 3,
+    in_progress: 4,
+    completed: 5,
+  };
+  return map[String(status || 'pending')] || 1;
+}
+
+function eachDay(start, end) {
+  const days = [];
+  const cur = new Date(start);
+  cur.setHours(0, 0, 0, 0);
+  const last = new Date(end);
+  last.setHours(0, 0, 0, 0);
+  // Cap points so charts stay readable (e.g. full month → ~daily still ok up to 31).
+  while (cur <= last && days.length < 62) {
+    days.push(new Date(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  if (!days.length) days.push(new Date(start));
+  return days;
+}
+
 app.get('/api/dashboard', authRequired, (req, res) => {
   const db = readDb();
   const period = String(req.query.period || 'this_week');
   const { start, end } = periodBounds(period);
-  const inPeriod = (iso) => {
-    const t = new Date(iso).getTime();
-    return !Number.isNaN(t) && t >= start.getTime() && t <= end.getTime();
-  };
-  const tasksInPeriod = (db.tasks || []).filter(
-    (t) => inPeriod(t.createdAt) || inPeriod(t.updatedAt)
+  const visible = getVisibleTasksForUser(db, req.user.id);
+  const recentTasks = visible.slice(0, 5).map((t) => ({
+    id: t.id,
+    title: t.title,
+    status: t.status,
+    updatedAt: t.updatedAt,
+    createdAt: t.createdAt,
+  }));
+
+  const days = eachDay(start, end);
+  const labels = days.map((d) =>
+    `${d.getMonth() + 1}/${d.getDate()}`
   );
-  const byStatus = {};
-  for (const t of tasksInPeriod) {
-    const s = t.status || 'pending';
-    byStatus[s] = (byStatus[s] || 0) + 1;
-  }
+  const palette = ['#3B82F6', '#22C55E', '#F59E0B', '#EF4444', '#A855F7'];
+  const series = recentTasks.map((t, i) => {
+    const created = new Date(t.createdAt || t.updatedAt || 0);
+    created.setHours(0, 0, 0, 0);
+    const score = statusScore(t.status);
+    const values = days.map((d) => (d >= created ? score : null));
+    return {
+      id: t.id,
+      title: t.title,
+      status: t.status,
+      color: palette[i % palette.length],
+      values,
+    };
+  });
+
   const announcements = [...(db.announcements || [])]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 20);
@@ -2043,12 +2086,11 @@ app.get('/api/dashboard', authRequired, (req, res) => {
       users: (db.users || []).length,
     },
     period,
+    recentTasks,
     chart: {
-      byStatus: Object.keys(byStatus).map((status) => ({
-        status,
-        count: byStatus[status],
-      })),
-      total: tasksInPeriod.length,
+      labels,
+      series,
+      yMax: 5,
     },
     announcements,
   });
