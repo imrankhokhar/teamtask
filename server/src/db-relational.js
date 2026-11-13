@@ -334,38 +334,24 @@ function trimNotificationsList(list, keep = MAX_NOTIFICATIONS_KEPT) {
 }
 
 /**
- * Drop excess notification rows in D1/SQLite *before* boot SELECT.
- * Without this, ORDER BY … LIMIT still scans the whole bloated table (rows_read).
+ * Wipe notifications before boot load.
+ * Never COUNT(*) / ORDER BY on this table — both scan every row on D1 (rows_read).
+ * In-app notifications are ephemeral; empty on boot is fine.
  */
-async function pruneNotificationsTable(adapter, keep = MAX_NOTIFICATIONS_KEPT) {
-  let before = 0;
+async function pruneNotificationsTable(adapter) {
   try {
-    const rows = await adapter.query('SELECT COUNT(*) AS c FROM notifications');
-    before = Number(rows[0]?.c || rows[0]?.count || 0);
-  } catch {
-    return { before: 0, deleted: 0 };
-  }
-  if (before <= keep) return { before, deleted: 0 };
-
-  // Spam recovery: if the table is huge, wipe it (notifications are ephemeral UI).
-  // One DELETE of N rows ≈ N writes — far cheaper than re-reading them on every boot.
-  if (before > keep * 4) {
     await adapter.run('DELETE FROM notifications', []);
     console.log(
-      `TeamTask: wiped notifications table (${before} rows) — over ${keep * 4} cap; keeping empty until new events`
+      'TeamTask: wiped notifications table before load (avoids D1 COUNT/ORDER BY rows_read)'
     );
-    return { before, deleted: before };
+    return { wiped: true, deleted: -1 };
+  } catch (err) {
+    console.warn(
+      'TeamTask: notification wipe failed:',
+      err && err.message ? err.message : err
+    );
+    return { wiped: false, deleted: 0 };
   }
-
-  const excess = before - keep;
-  await adapter.run(
-    `DELETE FROM notifications WHERE id IN (
-      SELECT id FROM notifications ORDER BY created_at ASC LIMIT ?
-    )`,
-    [excess]
-  );
-  console.log(`TeamTask: pruned notifications ${before} → ${keep} (deleted ${excess})`);
-  return { before, deleted: excess };
 }
 
 async function loadLegacyBlob(adapter, docId) {
@@ -438,12 +424,10 @@ async function loadFromRelational(adapter) {
     createdAt: r.created_at,
   }));
 
-  // Capped load — never pull the whole history into RAM / rows_read.
+  // No ORDER BY — on a fat table D1 bills a full scan for sort even with LIMIT.
+  // Table is wiped in pruneNotificationsTable; LIMIT is a safety net only.
   const notifications = (
-    await adapter.query(
-      'SELECT * FROM notifications ORDER BY created_at DESC LIMIT ?',
-      [MAX_NOTIFICATIONS_KEPT]
-    )
+    await adapter.query('SELECT * FROM notifications LIMIT ?', [MAX_NOTIFICATIONS_KEPT])
   ).map((r) => ({
     id: r.id,
     userId: r.user_id,
@@ -771,11 +755,13 @@ function buildIncrementalOps(prevDb, nextDb) {
     });
   }
 
+  // Replace-all when the list changes. Diff-by-id leaves orphan rows in D1 when
+  // a prior boot only loaded LIMIT N into memory (thousands unread forever).
   const notes = diffByKey(prev.notifications, next.notifications, (x) => x.id);
-  for (const id of notes.deletes) {
-    ops.push({ sql: 'DELETE FROM notifications WHERE id = ?', params: [id] });
+  if (notes.deletes.length || notes.upserts.length) {
+    ops.push({ sql: 'DELETE FROM notifications', params: [] });
+    for (const n of next.notifications || []) ops.push(notificationInsert(n));
   }
-  for (const n of notes.upserts) ops.push(notificationInsert(n));
 
   const fuelHist = diffByKey(prev.fuelCalHistory, next.fuelCalHistory, (x) => x.id);
   for (const id of fuelHist.deletes) {

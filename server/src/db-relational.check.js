@@ -137,7 +137,7 @@ async function main() {
     MAX_NOTIFICATIONS_KEPT * 5
   );
   const pruned = await pruneNotificationsTable(adapter);
-  assert.ok(pruned.deleted > 0);
+  assert.ok(pruned.wiped);
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM notifications').get().c, 0);
   const loaded = await loadFromRelational(adapter);
   assert.ok(loaded.notifications.length <= MAX_NOTIFICATIONS_KEPT);

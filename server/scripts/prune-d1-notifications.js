@@ -46,13 +46,10 @@ async function queryD1(sql, params = []) {
 }
 
 async function main() {
+  // Do not COUNT(*) first — that alone burns rows_read equal to table size.
   const adapter = createD1Adapter(queryD1);
-  const before = await adapter.query('SELECT COUNT(*) AS c FROM notifications');
-  console.log('notifications before:', before[0]);
   const result = await pruneNotificationsTable(adapter);
   console.log('prune result:', result);
-  const after = await adapter.query('SELECT COUNT(*) AS c FROM notifications');
-  console.log('notifications after:', after[0]);
 }
 
 main().catch((err) => {
