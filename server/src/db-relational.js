@@ -334,12 +334,21 @@ function trimNotificationsList(list, keep = MAX_NOTIFICATIONS_KEPT) {
 }
 
 /**
- * Wipe notifications before boot load.
- * Never COUNT(*) / ORDER BY on this table — both scan every row on D1 (rows_read).
- * In-app notifications are ephemeral; empty on boot is fine.
+ * Clear notifications before boot load when the table has any rows.
+ * - Never COUNT(*) / ORDER BY (those burn rows_read).
+ * - Probe with LIMIT 1, then DELETE only if needed (empty DELETE still costs a write round-trip).
+ * - Skip entirely when ops are paused (already over quota).
  */
 async function pruneNotificationsTable(adapter) {
   try {
+    try {
+      const { isOpsPaused } = require('./ops-limit');
+      if (isOpsPaused()) return { wiped: false, skipped: 'ops_paused' };
+    } catch {
+      // ops-limit optional during tests
+    }
+    const any = await adapter.query('SELECT id FROM notifications LIMIT 1');
+    if (!any.length) return { wiped: false, deleted: 0 };
     await adapter.run('DELETE FROM notifications', []);
     console.log(
       'TeamTask: wiped notifications table before load (avoids D1 COUNT/ORDER BY rows_read)'
@@ -694,15 +703,20 @@ function buildIncrementalOps(prevDb, nextDb) {
     ops.push({ sql: 'DELETE FROM task_team_assignees WHERE task_id = ?', params: [id] });
     ops.push({ sql: 'DELETE FROM tasks WHERE id = ?', params: [id] });
   }
+  const prevTaskById = new Map((prev.tasks || []).map((t) => [t.id, t]));
   for (const t of tasks.upserts) {
     ops.push(taskInsert(t));
-    // Sync reminders for this task only
-    ops.push({ sql: 'DELETE FROM task_reminders WHERE task_id = ?', params: [t.id] });
-    for (const rem of t.reminders || []) {
-      ops.push({
-        sql: 'INSERT OR REPLACE INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
-        params: [rem.id || uuid(), t.id, rem.at, bool(rem.notified)],
-      });
+    // Only rewrite child reminder rows when the reminders list actually changed.
+    const prevRem = prevTaskById.get(t.id)?.reminders || [];
+    const nextRem = t.reminders || [];
+    if (cloneJson(prevRem) !== cloneJson(nextRem)) {
+      ops.push({ sql: 'DELETE FROM task_reminders WHERE task_id = ?', params: [t.id] });
+      for (const rem of nextRem) {
+        ops.push({
+          sql: 'INSERT OR REPLACE INTO task_reminders (id, task_id, at, notified) VALUES (?, ?, ?, ?)',
+          params: [rem.id || uuid(), t.id, rem.at, bool(rem.notified)],
+        });
+      }
     }
   }
 
@@ -755,13 +769,13 @@ function buildIncrementalOps(prevDb, nextDb) {
     });
   }
 
-  // Replace-all when the list changes. Diff-by-id leaves orphan rows in D1 when
-  // a prior boot only loaded LIMIT N into memory (thousands unread forever).
+  // Incremental only — table is wiped on boot when non-empty. Avoid DELETE+reinsert
+  // of the whole list (that burned rows_written after every notification).
   const notes = diffByKey(prev.notifications, next.notifications, (x) => x.id);
-  if (notes.deletes.length || notes.upserts.length) {
-    ops.push({ sql: 'DELETE FROM notifications', params: [] });
-    for (const n of next.notifications || []) ops.push(notificationInsert(n));
+  for (const id of notes.deletes) {
+    ops.push({ sql: 'DELETE FROM notifications WHERE id = ?', params: [id] });
   }
+  for (const n of notes.upserts) ops.push(notificationInsert(n));
 
   const fuelHist = diffByKey(prev.fuelCalHistory, next.fuelCalHistory, (x) => x.id);
   for (const id of fuelHist.deletes) {
@@ -873,10 +887,8 @@ function mergeLegacyIntoRelational(current, legacy) {
     out.teamMembers = legacy.teamMembers || [];
     repaired = true;
   }
-  if (!(out.notifications || []).length && (legacy.notifications || []).length) {
-    out.notifications = legacy.notifications;
-    repaired = true;
-  }
+  // Never rehydrate notifications from legacy appstate — that re-inserted thousands
+  // of rows after a boot wipe and burned D1 rows_written.
   if (!(out.roles || []).length && (legacy.roles || []).length) {
     out.roles = legacy.roles;
     repaired = true;

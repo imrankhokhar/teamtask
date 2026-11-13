@@ -17,6 +17,7 @@ const {
   loadFromDisk: loadOpsLimitFromDisk,
   reportDbError,
   recordD1Usage,
+  isOpsPaused,
 } = require('./ops-limit');
 
 function resolveDataDir() {
@@ -355,6 +356,11 @@ async function queryD1(sql, params = []) {
 
 async function flushD1() {
   if (storeMode !== 'd1' || !relationalAdapter || !memoryDb || !remoteDirty) return;
+  if (isOpsPaused()) {
+    // Keep remoteDirty so a later resume can persist; do not burn more writes today.
+    console.warn('[d1] flush skipped — ops paused (write/read quota safety stop)');
+    return;
+  }
   const data = clone(memoryDb);
   await saveToRelational(relationalAdapter, data);
   remoteDirty = false;
@@ -376,6 +382,14 @@ async function flushRemote() {
 
 function scheduleRemoteFlush() {
   remoteDirty = true;
+  if (storeMode === 'd1' && isOpsPaused()) {
+    // Memory stays dirty; no D1 write while paused.
+    if (remoteFlushTimer) {
+      clearTimeout(remoteFlushTimer);
+      remoteFlushTimer = null;
+    }
+    return;
+  }
   if (remoteFlushTimer) return;
   // D1 free tier counts every deleted/inserted row — debounce hard to avoid burning quota.
   const delayMs = storeMode === 'd1' ? 30000 : 200;

@@ -13,7 +13,7 @@ const { WebSocketServer } = require('ws');
 const { v4: uuid } = require('uuid');
 const jwt = require('jsonwebtoken');
 
-const { readDb, updateDb, initDb, isCloudDbConfigured, getStoreMode } = require('./db');
+const { readDb, writeDb, updateDb, initDb, isCloudDbConfigured, getStoreMode } = require('./db');
 const {
   getStatus: getOpsStatus,
   confirmPause: confirmOpsPause,
@@ -214,42 +214,50 @@ async function processDueReminders() {
     // Safety: never notify the same reminder more than once per ~20h (stops D1 spam if date shift fails).
     const MIN_FIRE_GAP_MS = 20 * 60 * 60 * 1000;
     const due = [];
-    updateDb((db) => {
-      for (const task of db.tasks || []) {
-        ensureTaskReminders(task);
-        for (const rem of task.reminders || []) {
-          if (!rem.at || rem.notified) continue;
-          const atMs = new Date(rem.at).getTime();
-          if (Number.isNaN(atMs) || atMs > now) continue;
+    let dirty = false;
+    const db = readDb();
+    for (const task of db.tasks || []) {
+      const before = JSON.stringify(task.reminders || []);
+      const beforeLegacy = `${task.reminderAt || ''}|${task.reminderNotified ? 1 : 0}`;
+      ensureTaskReminders(task);
+      for (const rem of task.reminders || []) {
+        if (!rem.at || rem.notified) continue;
+        const atMs = new Date(rem.at).getTime();
+        if (Number.isNaN(atMs) || atMs > now) continue;
 
-          if (task.status === 'completed') {
-            // Due but completed: no notification, no date shift — just stop this reminder.
-            rem.notified = true;
-            continue;
-          }
+        if (task.status === 'completed') {
+          // Due but completed: no notification, no date shift — just stop this reminder.
+          rem.notified = true;
+          continue;
+        }
 
-          const lastFired = rem.lastFiredAt ? new Date(rem.lastFiredAt).getTime() : 0;
-          if (lastFired && now - lastFired < MIN_FIRE_GAP_MS) {
-            // Already fired recently — only repair a stuck past date, do not notify again.
-            rem.at = nextDailyOccurrence(rem.at, now);
-            rem.notified = false;
-            continue;
-          }
-
-          // Incomplete: fire once, then move to next day (same time).
-          due.push({
-            taskId: task.id,
-            title: task.title,
-            at: rem.at,
-            remId: rem.id,
-          });
-          rem.lastFiredAt = new Date(now).toISOString();
+        const lastFired = rem.lastFiredAt ? new Date(rem.lastFiredAt).getTime() : 0;
+        if (lastFired && now - lastFired < MIN_FIRE_GAP_MS) {
+          // Already fired recently — only repair a stuck past date, do not notify again.
           rem.at = nextDailyOccurrence(rem.at, now);
           rem.notified = false;
+          continue;
         }
-        syncLegacyReminderFields(task);
+
+        // Incomplete: fire once, then move to next day (same time).
+        due.push({
+          taskId: task.id,
+          title: task.title,
+          at: rem.at,
+          remId: rem.id,
+        });
+        rem.lastFiredAt = new Date(now).toISOString();
+        rem.at = nextDailyOccurrence(rem.at, now);
+        rem.notified = false;
       }
-    });
+      syncLegacyReminderFields(task);
+      const afterLegacy = `${task.reminderAt || ''}|${task.reminderNotified ? 1 : 0}`;
+      if (before !== JSON.stringify(task.reminders || []) || beforeLegacy !== afterLegacy) {
+        dirty = true;
+      }
+    }
+    // Only flush D1 when reminders actually changed (avoids a write every 5 minutes).
+    if (dirty) writeDb(db);
 
     // Hard cap one pass — protects D1 if many tasks were overdue.
     const batch = due.slice(0, 10);
