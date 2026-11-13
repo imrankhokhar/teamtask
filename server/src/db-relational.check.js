@@ -136,11 +136,15 @@ async function main() {
     db.prepare('SELECT COUNT(*) AS c FROM notifications').get().c,
     MAX_NOTIFICATIONS_KEPT * 5
   );
+  process.env.TEAMTASK_WIPE_NOTIFICATIONS = '1';
   const pruned = await pruneNotificationsTable(adapter);
   assert.ok(pruned.wiped);
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS c FROM notifications').get().c, 0);
+  delete process.env.TEAMTASK_WIPE_NOTIFICATIONS;
+  // Default: notifications are RAM-only — load must not pull from DB.
   const loaded = await loadFromRelational(adapter);
-  assert.ok(loaded.notifications.length <= MAX_NOTIFICATIONS_KEPT);
+  assert.strictEqual(loaded.notifications.length, 0);
+  assert.ok(MAX_NOTIFICATIONS_KEPT >= 1);
 
   // Re-init must not wipe users/tasks when notifications were pruned (no full-replace after load).
   const memory2 = await initRelationalStore(adapter, {

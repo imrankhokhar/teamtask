@@ -47,6 +47,8 @@ async function queryD1(sql, params = []) {
 
 async function main() {
   // Do not COUNT(*) first — that alone burns rows_read equal to table size.
+  // One write per deleted row — only run after midnight UTC when under quota.
+  process.env.TEAMTASK_WIPE_NOTIFICATIONS = '1';
   const adapter = createD1Adapter(queryD1);
   const result = await pruneNotificationsTable(adapter);
   console.log('prune result:', result);

@@ -5,9 +5,18 @@
 
 const { v4: uuid } = require('uuid');
 
-/** Cap in-app notifications so D1 free-tier boots never SELECT * tens of thousands of rows. */
-const MAX_NOTIFICATIONS_KEPT = 500;
+/** Cap in-app notifications in RAM only (not persisted to D1 — that burned ~80k writes/day). */
+const MAX_NOTIFICATIONS_KEPT = 100;
 const MAX_ANNOUNCEMENTS_KEPT = 50;
+
+/**
+ * Notifications stay in process memory for push/in-app UI.
+ * Persisting them to D1 caused INSERT OR REPLACE storms (tens of thousands of rows_written).
+ * Opt-in only: TEAMTASK_PERSIST_NOTIFICATIONS=1
+ */
+function persistNotifications() {
+  return /^(1|true|yes)$/i.test(String(process.env.TEAMTASK_PERSIST_NOTIFICATIONS || '').trim());
+}
 
 const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS roles (
@@ -334,12 +343,16 @@ function trimNotificationsList(list, keep = MAX_NOTIFICATIONS_KEPT) {
 }
 
 /**
- * Clear notifications before boot load when the table has any rows.
- * - Never COUNT(*) / ORDER BY (those burn rows_read).
- * - Probe with LIMIT 1, then DELETE only if needed (empty DELETE still costs a write round-trip).
- * - Skip entirely when ops are paused (already over quota).
+ * Optional one-shot wipe of the notifications table.
+ * Default: skip — we no longer SELECT/INSERT this table, so orphans cost $0 quota.
+ * Wiping a fat table costs 1 write per row; only run when under quota:
+ *   TEAMTASK_WIPE_NOTIFICATIONS=1
  */
 async function pruneNotificationsTable(adapter) {
+  const forceWipe = /^(1|true|yes)$/i.test(
+    String(process.env.TEAMTASK_WIPE_NOTIFICATIONS || '').trim()
+  );
+  if (!forceWipe) return { wiped: false, skipped: 'persist_disabled' };
   try {
     try {
       const { isOpsPaused } = require('./ops-limit');
@@ -350,9 +363,7 @@ async function pruneNotificationsTable(adapter) {
     const any = await adapter.query('SELECT id FROM notifications LIMIT 1');
     if (!any.length) return { wiped: false, deleted: 0 };
     await adapter.run('DELETE FROM notifications', []);
-    console.log(
-      'TeamTask: wiped notifications table before load (avoids D1 COUNT/ORDER BY rows_read)'
-    );
+    console.log('TeamTask: wiped notifications table (TEAMTASK_WIPE_NOTIFICATIONS=1)');
     return { wiped: true, deleted: -1 };
   } catch (err) {
     console.warn(
@@ -433,20 +444,23 @@ async function loadFromRelational(adapter) {
     createdAt: r.created_at,
   }));
 
-  // No ORDER BY — on a fat table D1 bills a full scan for sort even with LIMIT.
-  // Table is wiped in pruneNotificationsTable; LIMIT is a safety net only.
-  const notifications = (
-    await adapter.query('SELECT * FROM notifications LIMIT ?', [MAX_NOTIFICATIONS_KEPT])
-  ).map((r) => ({
-    id: r.id,
-    userId: r.user_id,
-    taskId: r.task_id || null,
-    type: r.type || null,
-    title: r.title || '',
-    body: r.body || '',
-    read: fromBool(r.read),
-    createdAt: r.created_at,
-  }));
+  // Never SELECT notifications from D1 (rows_read + leftover fat tables).
+  // In-app list is RAM-only unless TEAMTASK_PERSIST_NOTIFICATIONS=1.
+  let notifications = [];
+  if (persistNotifications()) {
+    notifications = (
+      await adapter.query('SELECT * FROM notifications LIMIT ?', [MAX_NOTIFICATIONS_KEPT])
+    ).map((r) => ({
+      id: r.id,
+      userId: r.user_id,
+      taskId: r.task_id || null,
+      type: r.type || null,
+      title: r.title || '',
+      body: r.body || '',
+      read: fromBool(r.read),
+      createdAt: r.created_at,
+    }));
+  }
 
   const settings = settingsFromRows(await adapter.query('SELECT * FROM app_settings'));
 
@@ -522,10 +536,12 @@ function normalizeDb(db) {
     teamMembers: uniqByKey(db.teamMembers, (x) => `${x.teamId}|${x.userId}`),
     tasks: uniqByKey(db.tasks, (x) => x.id).map((t) => ({
       ...t,
+      // Stable reminder ids — never uuid() here (that made every flush rewrite all tasks).
       reminders: uniqByKey(t.reminders || [], (x) => x.id || `${t.id}|${x.at}`).map((r) => ({
-        id: r.id || uuid(),
+        id: r.id || `${t.id}|${r.at}`,
         at: r.at,
         notified: Boolean(r.notified),
+        ...(r.lastFiredAt ? { lastFiredAt: r.lastFiredAt } : {}),
       })),
     })),
     taskAssignees: uniqByKey(db.taskAssignees, (x) => `${x.taskId}|${x.userId}`),
@@ -769,13 +785,14 @@ function buildIncrementalOps(prevDb, nextDb) {
     });
   }
 
-  // Incremental only — table is wiped on boot when non-empty. Avoid DELETE+reinsert
-  // of the whole list (that burned rows_written after every notification).
-  const notes = diffByKey(prev.notifications, next.notifications, (x) => x.id);
-  for (const id of notes.deletes) {
-    ops.push({ sql: 'DELETE FROM notifications WHERE id = ?', params: [id] });
+  // Default: do not persist notifications (D1 INSERT OR REPLACE burned ~80k writes/day).
+  if (persistNotifications()) {
+    const notes = diffByKey(prev.notifications, next.notifications, (x) => x.id);
+    for (const id of notes.deletes) {
+      ops.push({ sql: 'DELETE FROM notifications WHERE id = ?', params: [id] });
+    }
+    for (const n of notes.upserts) ops.push(notificationInsert(n));
   }
-  for (const n of notes.upserts) ops.push(notificationInsert(n));
 
   const fuelHist = diffByKey(prev.fuelCalHistory, next.fuelCalHistory, (x) => x.id);
   for (const id of fuelHist.deletes) {
@@ -827,7 +844,8 @@ function buildIncrementalOps(prevDb, nextDb) {
 function buildFullReplaceOps(db) {
   const next = normalizeDb(db);
   const empty = normalizeDb({});
-  // Diff against empty = insert every row once (migration / force)
+  // Diff against empty = insert every row once (migration / force).
+  // Always DELETE notifications to clear orphans; inserts only if persistNotifications().
   return [
     ...[
       'checklist_replies',
